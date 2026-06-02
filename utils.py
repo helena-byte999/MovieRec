@@ -128,7 +128,7 @@ def sidebar_nav(current_page):
         section[data-testid="stSidebar"] .stButton>button:hover{{background:rgba(229,9,20,.1)!important;color:#fff!important;}}
         </style>""", unsafe_allow_html=True)
 
-        st.markdown('<div class="nav-logo">Cine<span>Match</span></div>', unsafe_allow_html=True)
+        st.markdown('<div class="nav-logo"><span style="color:#fff">MOV.IE</span><span style="color:#9333ea"> REC</span></div>', unsafe_allow_html=True)
 
         for name, icon in [("Home", "⌂"), ("Watchlist", "☆")]:
             if current_page == name:
@@ -150,43 +150,68 @@ def sidebar_nav(current_page):
             st.markdown(f"<div style='font-size:.78rem;color:#8890b8'>{wl_count} in Watchlist</div>", unsafe_allow_html=True)
         st.markdown("<div style='font-size:.7rem;color:#8890b8;margin-top:1rem'>TMDB · Streamlit</div>", unsafe_allow_html=True)
 
+def _card(row, t, has_type):
+    yr  = str(row.release_date)[:4]
+    ov  = str(row.overview)[:110] + '…' if len(str(row.overview)) > 110 else str(row.overview)
+    return f"""
+    <div style="background:{t['card_bg']};border:1px solid {t['border']};border-radius:14px;
+                overflow:hidden;transition:transform .2s,box-shadow .2s;height:100%;
+                display:flex;flex-direction:column;"
+         onmouseover="this.style.transform='translateY(-5px)';this.style.boxShadow='0 14px 36px rgba(0,0,0,.5)'"
+         onmouseout="this.style.transform='';this.style.boxShadow=''">
+        <div style="position:relative;flex-shrink:0;">
+            <img src="{poster_url(row.get('poster_path',''))}" alt="{row.title}"
+                 style="width:100%;aspect-ratio:2/3;object-fit:cover;display:block;" loading="lazy"/>
+            <div style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,.78);
+                        color:{GOLD};border-radius:6px;padding:3px 8px;
+                        font-size:.7rem;font-weight:700;">{row.vote_average}★</div>
+        </div>
+        <div style="padding:.75rem;flex:1;display:flex;flex-direction:column;gap:.2rem;">
+            <div style="font-weight:700;font-size:.88rem;color:{t['text']};
+                        white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"
+                 title="{row.title}">{row.title}</div>
+            <div style="margin:.1rem 0">{type_badge(row, has_type)}{genre_badges(row.genres, 2)}</div>
+            <div style="font-size:.72rem;color:{t['subtext']}">{yr} · {int(row.vote_count):,} votes</div>
+            <div style="font-size:.72rem;color:{t['subtext']};line-height:1.5;margin-top:.2rem;
+                        display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;">{ov}</div>
+        </div>
+    </div>"""
+
 def render_grid(rows, t, has_type):
-    cols = st.columns(5)
-    for i, row in enumerate(rows):
-        with cols[i % 5]:
-            yr  = str(row.release_date)[:4]
-            ov  = str(row.overview)[:100]+'…' if len(str(row.overview))>100 else str(row.overview)
-            st.image(poster_url(row.get('poster_path','')), use_container_width=True)
-            st.markdown(f"""<div class="card-body">
-                <div class="card-title" title="{row.title}">{row.title}</div>
-                <div style="margin:.2rem 0">{type_badge(row,has_type)}{genre_badges(row.genres,2)}</div>
-                <div class="card-meta">{yr} · {int(row.vote_count):,} votes</div>
-                <div style="color:{GOLD};font-size:.84rem">{star_rating(row.vote_average)}
-                    <span style="color:{t['text']};font-weight:700"> {row.vote_average}/10</span>
-                </div>
-                <div class="card-overview">{ov}</div>
-            </div>""", unsafe_allow_html=True)
+    cards = ''.join(_card(row, t, has_type) for row in rows)
+    st.markdown(f"""
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:1rem;margin-top:.5rem;">
+        {cards}
+    </div>""", unsafe_allow_html=True)
 
 def render_list(rows, t, has_type):
+    items = []
     for row in rows:
         yr = str(row.release_date)[:4]
-        c1, c2 = st.columns([1, 4])
-        with c1:
-            st.image(poster_url(row.get('poster_path','')), use_container_width=True)
-        with c2:
-            st.markdown(f"""<div style="padding:.4rem 0">
-                <div class="list-title">{row.title}</div>
-                <div style="margin:.2rem 0">{type_badge(row,has_type)}{genre_badges(row.genres,3)}</div>
-                <div class="card-meta">{yr} · {int(row.vote_count):,} votes</div>
-                <div style="color:{GOLD};font-size:.88rem">{star_rating(row.vote_average)}
+        items.append(f"""
+        <div style="background:{t['card_bg']};border:1px solid {t['border']};border-radius:14px;
+                    display:flex;gap:1rem;padding:1rem;
+                    transition:transform .2s,box-shadow .2s;"
+             onmouseover="this.style.transform='translateX(4px)';this.style.boxShadow='0 4px 20px rgba(0,0,0,.4)'"
+             onmouseout="this.style.transform='';this.style.boxShadow=''">
+            <img src="{poster_url(row.get('poster_path',''))}" alt="{row.title}"
+                 style="width:80px;height:120px;object-fit:cover;border-radius:8px;flex-shrink:0;" loading="lazy"/>
+            <div style="flex:1;min-width:0;">
+                <div style="font-weight:700;font-size:.98rem;color:{t['text']};
+                            white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:.25rem;">{row.title}</div>
+                <div style="margin:.2rem 0">{type_badge(row, has_type)}{genre_badges(row.genres, 3)}</div>
+                <div style="font-size:.75rem;color:{t['subtext']};margin:.2rem 0">{yr} · {int(row.vote_count):,} votes</div>
+                <div style="color:{GOLD};font-size:.85rem">{star_rating(row.vote_average)}
                     <span style="color:{t['text']};font-weight:700"> {row.vote_average}/10</span>
                 </div>
-                <div class="list-overview">{row.overview}</div>
-            </div>""", unsafe_allow_html=True)
-        st.divider()
+                <div style="font-size:.8rem;color:{t['subtext']};line-height:1.55;margin-top:.4rem;
+                            display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">{row.overview}</div>
+            </div>
+        </div>""")
+    st.markdown(f'<div style="display:flex;flex-direction:column;gap:.75rem;margin-top:.5rem;">{"".join(items)}</div>', unsafe_allow_html=True)
 
 def show_results(rows, t, has_type):
-    if st.session_state.view_mode == 'Grid':
+    if st.session_state.get('view_mode', 'Grid') == 'Grid':
         render_grid(rows, t, has_type)
     else:
         render_list(rows, t, has_type)
