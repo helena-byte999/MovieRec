@@ -381,55 +381,57 @@ all_items += fetch_items('tv', pages=20, vote_min=100, sort_by='vote_average.des
 # Get a free key at: https://www.omdbapi.com/apikey.aspx
 OMDB_KEY = os.environ.get('OMDB_KEY', '').strip()
 
-def enrich_omdb(items, limit=1000):
+def enrich_omdb_df(df, limit=1000):
     """
     Fetch RT + Metacritic scores from OMDB for the top `limit` titles by
-    popularity. Adds rt_score (0-100) and metacritic_score (0-100) fields.
-    Skips silently if no key or request fails.
+    popularity. Operates on the final deduplicated DataFrame so enriched
+    rows are never discarded. Adds rt_score and metacritic_score columns.
     """
     if not OMDB_KEY:
         print("  (OMDB_KEY not set — skipping RT/Metacritic enrichment)")
-        return items
+        df['rt_score']         = float('nan')
+        df['metacritic_score'] = float('nan')
+        return df
 
-    # Sort by popularity and enrich the top titles
-    sorted_items = sorted(items, key=lambda x: x.get('popularity', 0), reverse=True)
-    enriched, skipped = 0, 0
+    df['rt_score']         = float('nan')
+    df['metacritic_score'] = float('nan')
 
+    top_idx = df.nlargest(limit, 'popularity').index.tolist()
     print(f"\nEnriching top {limit} titles with OMDB (RT + Metacritic)…")
+    enriched = 0
 
-    def _omdb_fetch(item):
+    def _fetch(idx):
+        row = df.loc[idx]
         try:
-            params = {'apikey': OMDB_KEY, 't': item['title'],
-                      'type': 'movie' if item['type'] == 'Movie' else 'series'}
-            year = str(item.get('release_date', ''))[:4]
+            params = {'apikey': OMDB_KEY, 't': row['title'],
+                      'type': 'movie' if row['type'] == 'Movie' else 'series'}
+            year = str(row.get('release_date', ''))[:4]
             if year: params['y'] = year
             res = _session.get('https://www.omdbapi.com/', params=params, timeout=5).json()
             if res.get('Response') != 'True':
-                return False
+                return idx, None, None
+            rt, mc = None, None
             for rating in res.get('Ratings', []):
                 if rating['Source'] == 'Rotten Tomatoes':
-                    try: item['rt_score'] = int(rating['Value'].replace('%', ''))
+                    try: rt = int(rating['Value'].replace('%', ''))
                     except Exception: pass
                 if rating['Source'] == 'Metacritic':
-                    try: item['metacritic_score'] = int(rating['Value'].split('/')[0])
+                    try: mc = int(rating['Value'].split('/')[0])
                     except Exception: pass
-            imdb_votes = res.get('imdbVotes', '').replace(',', '')
-            if imdb_votes.isdigit() and int(imdb_votes) > item.get('vote_count', 0):
-                item['vote_count'] = int(imdb_votes)
-            return True
+            return idx, rt, mc
         except Exception:
-            return False
+            return idx, None, None
 
-    # OMDB free tier = 1,000 req/day — use 5 workers to stay safe
     with ThreadPoolExecutor(max_workers=5) as pool:
-        results = list(pool.map(_omdb_fetch, sorted_items[:limit]))
+        for idx, rt, mc in pool.map(_fetch, top_idx):
+            if rt is not None:
+                df.at[idx, 'rt_score'] = rt
+                enriched += 1
+            if mc is not None:
+                df.at[idx, 'metacritic_score'] = mc
 
-    enriched = sum(results)
-    skipped  = len(results) - enriched
-    print(f"  OMDB enriched: {enriched}  skipped: {skipped}")
-    return items
-
-all_items = enrich_omdb(all_items, limit=1000)
+    print(f"  OMDB enriched: {enriched}/{limit}")
+    return df
 
 # ── Merge IMDb supplement if it exists ───────────────────────────────
 if os.path.exists('imdb_supplement.pkl'):
@@ -462,6 +464,9 @@ text_mask = (~lgbtq_mask) & df.apply(_text_is_lgbtq, axis=1)
 df.loc[text_mask, 'tags'] += ' lgbtq queer lgbtq_community'
 print(f"LGBTQ+ titles via text fallback: {text_mask.sum()}")
 print(f"LGBTQ+ titles in dataset (total): {(lgbtq_mask | text_mask).sum()}")
+
+# ── OMDB enrichment — runs AFTER dedup so enriched rows are never dropped ──
+df = enrich_omdb_df(df, limit=1000)
 
 print(f"\nTotal entries: {len(df)}")
 print(df['type'].value_counts().to_dict())
