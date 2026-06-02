@@ -17,4 +17,4 @@ COPY templates/ templates/
 EXPOSE 5000
 
 # Use gunicorn in production (4 workers, 120s timeout for large pkl load)
-CMD ["gunicorn", "--workers", "4", "--timeout", "120", "--bind", "0.0.0.0:5000", "flask_app:app"]
+CMD ["sh", "-c", "gunicorn --workers 2 --timeout 120 --bind 0.0.0.0:${PORT:-5000} flask_app:app"]
