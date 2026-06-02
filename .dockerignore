@@ -1,0 +1,15 @@
+.env
+*.pkl
+*.db
+instance/
+__pycache__/
+*.pyc
+.git/
+tests/
+fetch_data.py
+fetch_imdb_supplement.py
+*.png
+*.jpg
+imdb_supplement.pkl
+movie_list_backup.pkl
+similarity_backup.pkl

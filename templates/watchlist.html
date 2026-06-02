@@ -3,17 +3,16 @@
 
 {% block content %}
 <div class="content-section" style="padding-top:5rem">
-  <h1 class="fw-black mb-1">My Watchlist
-    <span class="fs-5 fw-normal text-muted">({{ watchlist|length }} saved)</span>
+  <h1 class="fw-black mb-1">{{ t.watchlist_title }}
+    <span class="fs-5 fw-normal text-muted">({{ watchlist|length }} {{ t.saved }})</span>
   </h1>
 
-  <!-- Add search -->
   <div class="row mt-3 mb-4">
     <div class="col-12 col-md-6 position-relative">
       <div class="input-group search-group">
         <input type="text" class="form-control search-input" id="wlInput"
-               placeholder="Search to add a title…" autocomplete="off"/>
-        <button class="btn btn-danger fw-bold" id="wlAddBtn">+ Add</button>
+               placeholder="{{ t.search_add_placeholder }}" autocomplete="off"/>
+        <button class="btn btn-danger fw-bold" id="wlAddBtn">{{ t.add_btn }}</button>
       </div>
       <ul class="autocomplete-list list-unstyled" id="wlAutocomplete"></ul>
       <div id="wlMsg" class="search-msg mt-1"></div>
@@ -21,7 +20,6 @@
   </div>
 
   {% if watchlist %}
-  <!-- Grid -->
   <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-5 g-3" id="wlGrid">
     {% for m in watchlist %}
     <div class="col" id="wl-{{ loop.index }}">
@@ -32,10 +30,14 @@
         </div>
         <div class="card-info">
           <p class="card-name" title="{{ m.title }}">{{ m.title }}</p>
-          <p class="card-meta-text">{{ m.year }} · {{ m.type }}</p>
+          <p class="card-meta-text">{{ m.year }} · {% if m.type == 'Movie' %}{{ t.type_movie }}{% else %}{{ t.type_tv }}{% endif %}</p>
+          <button class="btn btn-sm btn-success w-100 mt-1 fw-bold watched-btn"
+                  onclick="event.stopPropagation();markWatched('{{ m.title }}','{{ m.poster_url }}','{{ m.year }}','{{ m.type }}',{{ m.vote_average }},'wl-{{ loop.index }}')">
+            🎬 {{ t.mark_watched | default('Watched!') }}
+          </button>
           <button class="btn btn-sm btn-outline-danger w-100 mt-1 remove-btn"
                   onclick="event.stopPropagation();removeFromWatchlist('{{ m.title }}', 'wl-{{ loop.index }}')">
-            Remove
+            {{ t.remove }}
           </button>
         </div>
       </div>
@@ -45,10 +47,12 @@
 
   <hr class="my-4"/>
 
-  <!-- Smart suggestions -->
-  {% if suggestions %}
-  <h5 class="section-title">Based on your watchlist</h5>
-  <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-5 g-3">
+  <div class="d-flex align-items-center gap-3 mt-4 mb-2">
+    <h5 class="section-title mb-0" id="suggestionsHeading">{{ t.based_on_watchlist }}</h5>
+    <button class="btn btn-sm refresh-suggestions-btn" id="refreshSuggestionsBtn"
+            onclick="refreshSuggestions()">↻ {{ t.refresh }}</button>
+  </div>
+  <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-5 g-3" id="suggestionsGrid">
     {% for m in suggestions %}
     <div class="col">
       <div class="movie-card h-100" onclick='openDetail({{ m|tojson }})'>
@@ -64,23 +68,82 @@
     </div>
     {% endfor %}
   </div>
-  {% endif %}
-
-  <div class="mt-4">
-    <button class="btn btn-outline-danger" onclick="clearWatchlist()">Clear All</button>
-  </div>
 
   {% else %}
   <div class="text-center py-5 text-muted">
-    <p class="fs-5">Your watchlist is empty.</p>
-    <a href="/" class="btn btn-danger">Go to Home</a>
+    <p class="fs-5">{{ t.empty_watchlist }}</p>
+    <a href="/" class="btn btn-danger">{{ t.go_home }}</a>
+  </div>
+  {% endif %}
+
+  <!-- ── Watch History ─────────────────────────────────────────────── -->
+  {% if watched %}
+  <hr class="my-5"/>
+  <h4 class="fw-black mb-1">🎬 {{ t.watch_history | default('Watch History') }}</h4>
+  <p class="text-muted small mb-3">{{ watched|length }} {{ t.titles_watched | default('titles watched') }}</p>
+  <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-6 g-3">
+    {% for w in watched %}
+    <div class="col">
+      <div class="watched-card">
+        <div class="position-relative">
+          <img src="{{ w.poster_url or 'https://placehold.co/300x450/1a1a2e/59005c?text=No+Image' }}"
+               alt="{{ w.title }}" class="card-poster w-100" loading="lazy"/>
+          <div class="watched-overlay">✓</div>
+        </div>
+        <div class="card-info">
+          <p class="card-name" title="{{ w.title }}">{{ w.title }}</p>
+          <p class="card-meta-text">{{ w.year }} · ⭐ {{ w.rating }}</p>
+          <p class="card-meta-text" style="font-size:.65rem;color:var(--subtext)">
+            {{ w.watched_at.strftime('%b %d, %Y') }}
+          </p>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
   </div>
   {% endif %}
 </div>
 {% endblock %}
 
 {% block scripts %}
+<script id="wl-data" type="application/json">{{ wl_titles|tojson }}</script>
 <script>
-window.WATCHLIST = {{ session.get('watchlist', [])|tojson }};
+window.WATCHLIST = JSON.parse(document.getElementById('wl-data').textContent);
+
+function refreshSuggestions() {
+  const btn  = document.getElementById('refreshSuggestionsBtn');
+  const grid = document.getElementById('suggestionsGrid');
+  if (!grid) return;
+  if (btn) { btn.disabled = true; btn.textContent = '↻ …'; }
+
+  // Fade out current suggestions
+  grid.style.transition = 'opacity .25s';
+  grid.style.opacity    = '0';
+
+  fetch('/api/watchlist_suggestions')
+    .then(r => r.json())
+    .then(results => {
+      grid.innerHTML = results.map(m => `
+        <div class="col">
+          <div class="movie-card h-100" onclick='openDetail(${JSON.stringify(m).replace(/'/g,"&#39;")})'>
+            <div class="position-relative">
+              <img src="${m.poster_url}" alt="${m.title}" class="card-poster w-100" loading="lazy"
+                   onerror="this.src='https://placehold.co/300x450/1a1a2e/59005c?text=No+Image'"/>
+              <span class="rating-badge">${m.vote_average}★</span>
+            </div>
+            <div class="card-info">
+              <p class="card-name">${m.title}</p>
+              <p class="card-meta-text">${m.year} · ${m.vote_average}/10</p>
+            </div>
+          </div>
+        </div>`).join('');
+
+      // Fade back in
+      grid.style.opacity = '1';
+    })
+    .finally(() => {
+      if (btn) { btn.disabled = false; btn.textContent = '↻ ' + (window.T?.refresh || 'Refresh'); }
+    });
+}
 </script>
 {% endblock %}
