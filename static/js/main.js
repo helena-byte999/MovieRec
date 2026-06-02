@@ -1,3 +1,24 @@
+/* ── Region ──────────────────────────────────────────────────────────── */
+function setRegion(code) {
+  fetch('/api/set_region', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ region: code })
+  }).then(() => location.reload());
+}
+
+// Auto-detect on first visit (localStorage flag prevents repeat calls)
+if (!localStorage.getItem('regionDetected')) {
+  fetch('/api/detect_region')
+    .then(r => r.json())
+    .then(data => {
+      localStorage.setItem('regionDetected', '1');
+      const code = data.country_code;
+      if (code && code !== 'GLOBAL') setRegion(code);
+    })
+    .catch(() => localStorage.setItem('regionDetected', '1'));
+}
+
 /* ── Theme ───────────────────────────────────────────────────────────── */
 const html        = document.documentElement;
 const themeToggle = document.getElementById('themeToggle');
