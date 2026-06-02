@@ -1,4 +1,6 @@
 *.pkl
+!movie_list.pkl
+!similarity.pkl
 __pycache__/
 .streamlit/
 *.pyc
