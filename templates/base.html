@@ -24,6 +24,21 @@
         {% endif %}
       </a>
     </div>
+    <!-- Region selector -->
+    <div class="dropdown me-2">
+      <button class="btn btn-sm region-btn dropdown-toggle" data-bs-toggle="dropdown"
+              aria-expanded="false" id="regionBtn" title="Select your region">
+        {{ current_region }}
+      </button>
+      <ul class="dropdown-menu dropdown-menu-end region-menu">
+        {% for code, label in regions_list %}
+        <li>
+          <a class="dropdown-item {% if current_region == code %}active{% endif %}"
+             href="#" onclick="setRegion('{{ code }}'); return false;">{{ label }}</a>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
     <button class="btn btn-sm theme-btn" id="themeToggle" title="Toggle theme">🌙</button>
   </div>
 </nav>

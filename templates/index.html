@@ -20,11 +20,12 @@
   </div>
 </section>
 
-<!-- ── Trending ───────────────────────────────────────────────────────── -->
+<!-- ── Genre Rows (region-filtered) ──────────────────────────────────── -->
+{% for row in genre_rows %}
 <section class="content-section">
-  <h5 class="section-title">Trending Now</h5>
+  <h5 class="section-title">{{ row.label }}</h5>
   <div class="movie-scroll">
-    {% for m in trending %}
+    {% for m in row.items %}
     <div class="scroll-card" onclick='openDetail({{ m|tojson }})'>
       <div class="position-relative">
         <img src="{{ m.poster_url }}" alt="{{ m.title }}" class="scroll-poster" loading="lazy"/>
@@ -36,44 +37,7 @@
     {% endfor %}
   </div>
 </section>
-
-{% if mv_list %}
-<!-- ── Movies ─────────────────────────────────────────────────────────── -->
-<section class="content-section">
-  <h5 class="section-title">Top Movies</h5>
-  <div class="movie-scroll">
-    {% for m in mv_list %}
-    <div class="scroll-card" onclick='openDetail({{ m|tojson }})'>
-      <div class="position-relative">
-        <img src="{{ m.poster_url }}" alt="{{ m.title }}" class="scroll-poster" loading="lazy"/>
-        <span class="rating-badge">{{ m.vote_average }}★</span>
-      </div>
-      <p class="scroll-title">{{ m.title[:22] }}{% if m.title|length > 22 %}…{% endif %}</p>
-      <p class="scroll-year">{{ m.year }}</p>
-    </div>
-    {% endfor %}
-  </div>
-</section>
-{% endif %}
-
-{% if tv_list %}
-<!-- ── TV Shows ───────────────────────────────────────────────────────── -->
-<section class="content-section">
-  <h5 class="section-title">Top TV Shows</h5>
-  <div class="movie-scroll">
-    {% for m in tv_list %}
-    <div class="scroll-card" onclick='openDetail({{ m|tojson }})'>
-      <div class="position-relative">
-        <img src="{{ m.poster_url }}" alt="{{ m.title }}" class="scroll-poster" loading="lazy"/>
-        <span class="rating-badge">{{ m.vote_average }}★</span>
-      </div>
-      <p class="scroll-title">{{ m.title[:22] }}{% if m.title|length > 22 %}…{% endif %}</p>
-      <p class="scroll-year">{{ m.year }}</p>
-    </div>
-    {% endfor %}
-  </div>
-</section>
-{% endif %}
+{% endfor %}
 
 <!-- ── Recommendations ───────────────────────────────────────────────── -->
 <section class="content-section" id="searchSection">

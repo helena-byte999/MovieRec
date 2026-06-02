@@ -49,6 +49,25 @@ a { text-decoration: none; }
 }
 .theme-btn:hover { background: rgba(229,9,20,.18); color: #fff; border-color: rgba(229,9,20,.4); }
 
+.region-btn {
+  background: transparent; border: 1px solid rgba(255,255,255,.2);
+  color: rgba(255,255,255,.7); border-radius: 6px; padding: .3rem .65rem;
+  font-size: .78rem; font-weight: 600; letter-spacing: .3px; transition: all .15s;
+}
+.region-btn:hover, .region-btn:focus, .region-btn.show {
+  background: rgba(147,51,234,.2); color: #fff; border-color: rgba(147,51,234,.5);
+}
+.region-menu {
+  background: var(--card-bg); border: 1px solid var(--border);
+  border-radius: 10px; padding: .4rem; min-width: 200px; max-height: 320px;
+  overflow-y: auto;
+}
+.region-menu .dropdown-item {
+  color: var(--subtext); border-radius: 6px; font-size: .82rem; padding: .4rem .75rem;
+}
+.region-menu .dropdown-item:hover { background: rgba(229,9,20,.12); color: var(--text); }
+.region-menu .dropdown-item.active { background: rgba(229,9,20,.22); color: #fff; }
+
 /* ── Hero ───────────────────────────────────────────────────────────── */
 .hero-section {
   position: relative; min-height: 520px;
