@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh auth *)",
+      "Bash(git init *)",
+      "Bash(git commit *)",
+      "Bash(git config *)",
+      "Bash(gh repo *)",
+      "Bash(python -c \"import utils\")",
+      "Bash(python -c \"from utils import top_navbar; print\\('ok'\\)\")",
+      "Bash(Remove-Item -Recurse -Force \"c:\\\\Users\\\\nanao\\\\OneDrive - Northumbria University - Production Azure AD\\\\Desktop\\\\python\\\\MovieRec\\\\__pycache__\" -ErrorAction SilentlyContinue)"
+    ]
+  }
+}

@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>MOV.IE REC</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet"/>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}"/>
+</head>
+<body>
+
+<!-- ── Transparent Navbar ─────────────────────────────────────────────── -->
+<nav class="navbar navbar-expand-lg fixed-top transparent-nav" id="mainNav">
+  <div class="container-fluid px-4">
+    <a class="navbar-brand fw-black fs-4" href="/">
+      <span style="color:#fff;font-weight:900">MOV.IE</span><span style="color:#9333ea;font-weight:900"> REC</span>
+    </a>
+    <div class="navbar-nav mx-auto d-flex flex-row gap-1">
+      <a class="nav-link px-3 py-2 rounded-1 {% if active == 'home' %}nav-active{% endif %}" href="/">Home</a>
+      <a class="nav-link px-3 py-2 rounded-1 {% if active == 'watchlist' %}nav-active{% endif %}" href="/watchlist">
+        Watchlist
+        {% if session.get('watchlist') %}
+        <span class="badge rounded-pill bg-danger ms-1">{{ session['watchlist']|length }}</span>
+        {% endif %}
+      </a>
+    </div>
+    <button class="btn btn-sm theme-btn" id="themeToggle" title="Toggle theme">🌙</button>
+  </div>
+</nav>
+
+{% block content %}{% endblock %}
+
+<!-- ── Detail Modal ───────────────────────────────────────────────────── -->
+<div class="modal fade" id="detailModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content border-0 detail-modal">
+      <div class="modal-header border-0 pb-0">
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body pt-1" id="modalBody">
+        <div class="text-center py-4"><div class="spinner-border text-danger"></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Watchlist Toast ────────────────────────────────────────────────── -->
+<div class="position-fixed bottom-0 end-0 p-3" style="z-index:9999">
+  <div id="wlToast" class="toast align-items-center border-0 text-white"
+       role="alert" data-bs-delay="3000" data-bs-autohide="true">
+    <div class="d-flex">
+      <div class="toast-body d-flex align-items-center gap-2" id="wlToastMsg">
+        <span id="wlToastIcon">✓</span>
+        <span id="wlToastText">Added to watchlist!</span>
+      </div>
+      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="{{ url_for('static', filename='js/main.js') }}"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

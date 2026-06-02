@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ping -n 4 127.0.0.1 > nul & jupyter server list 2>&1)",
+      "Bash(ping -n 8 127.0.0.1 > nul & jupyter server list 2>&1)",
+      "PowerShell($proc = Start-Process -FilePath \"python\" -ArgumentList \"-m\", \"jupyter\", \"lab\" -PassThru -WindowStyle Normal; Start-Sleep -Seconds 6; jupyter server list 2>&1; Write-Host \"PID: $\\($proc.Id\\)\" ; Get-Process -Id $proc.Id -ErrorAction SilentlyContinue | Select-Object Id, Name)",
+      "Bash(del \"c:\\\\Users\\\\nanao\\\\OneDrive - Northumbria University - Production Azure AD\\\\Desktop\\\\python\\\\MovieRec\\\\Untitled.ipynb\")",
+      "Bash(python -c \"import utils; print\\(utils.__file__\\)\")"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\nanao\\OneDrive - Northumbria University - Production Azure AD\\Desktop\\python\\MovieRec",
+      "c:\\Users\\nanao\\OneDrive - Northumbria University - Production Azure AD\\Desktop\\python\\MovieRec"
+    ]
+  }
+}

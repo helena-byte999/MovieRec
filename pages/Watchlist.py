@@ -5,7 +5,7 @@ from utils import (
     fuzzy_suggest, watchlist_suggest, ACCENT
 )
 
-st.set_page_config(page_title="Watchlist · CineMatch", page_icon="☆", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="Watchlist · MOV.IE REC", page_icon="☆", layout="wide", initial_sidebar_state="expanded")
 
 init_state()
 movies, similarity = load_data()

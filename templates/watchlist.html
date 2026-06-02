@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% set active = "watchlist" %}
+
+{% block content %}
+<div class="content-section" style="padding-top:5rem">
+  <h1 class="fw-black mb-1">My Watchlist
+    <span class="fs-5 fw-normal text-muted">({{ watchlist|length }} saved)</span>
+  </h1>
+
+  <!-- Add search -->
+  <div class="row mt-3 mb-4">
+    <div class="col-12 col-md-6 position-relative">
+      <div class="input-group search-group">
+        <input type="text" class="form-control search-input" id="wlInput"
+               placeholder="Search to add a title…" autocomplete="off"/>
+        <button class="btn btn-danger fw-bold" id="wlAddBtn">+ Add</button>
+      </div>
+      <ul class="autocomplete-list list-unstyled" id="wlAutocomplete"></ul>
+      <div id="wlMsg" class="search-msg mt-1"></div>
+    </div>
+  </div>
+
+  {% if watchlist %}
+  <!-- Grid -->
+  <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-5 g-3" id="wlGrid">
+    {% for m in watchlist %}
+    <div class="col" id="wl-{{ loop.index }}">
+      <div class="movie-card h-100" onclick='openDetail({{ m|tojson }})'>
+        <div class="position-relative">
+          <img src="{{ m.poster_url }}" alt="{{ m.title }}" class="card-poster w-100" loading="lazy"/>
+          <span class="rating-badge">{{ m.vote_average }}★</span>
+        </div>
+        <div class="card-info">
+          <p class="card-name" title="{{ m.title }}">{{ m.title }}</p>
+          <p class="card-meta-text">{{ m.year }} · {{ m.type }}</p>
+          <button class="btn btn-sm btn-outline-danger w-100 mt-1 remove-btn"
+                  onclick="event.stopPropagation();removeFromWatchlist('{{ m.title }}', 'wl-{{ loop.index }}')">
+            Remove
+          </button>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <hr class="my-4"/>
+
+  <!-- Smart suggestions -->
+  {% if suggestions %}
+  <h5 class="section-title">Based on your watchlist</h5>
+  <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-5 g-3">
+    {% for m in suggestions %}
+    <div class="col">
+      <div class="movie-card h-100" onclick='openDetail({{ m|tojson }})'>
+        <div class="position-relative">
+          <img src="{{ m.poster_url }}" alt="{{ m.title }}" class="card-poster w-100" loading="lazy"/>
+          <span class="rating-badge">{{ m.vote_average }}★</span>
+        </div>
+        <div class="card-info">
+          <p class="card-name">{{ m.title }}</p>
+          <p class="card-meta-text">{{ m.year }} · {{ m.vote_average }}/10</p>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <div class="mt-4">
+    <button class="btn btn-outline-danger" onclick="clearWatchlist()">Clear All</button>
+  </div>
+
+  {% else %}
+  <div class="text-center py-5 text-muted">
+    <p class="fs-5">Your watchlist is empty.</p>
+    <a href="/" class="btn btn-danger">Go to Home</a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+window.WATCHLIST = {{ session.get('watchlist', [])|tojson }};
+</script>
+{% endblock %}

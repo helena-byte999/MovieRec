@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% set active = "home" %}
+
+{% block content %}
+
+<!-- ── Hero ──────────────────────────────────────────────────────────── -->
+<section class="hero-section"
+         style="{% if hero.backdrop_url %}background-image:url('{{ hero.backdrop_url }}'){% endif %}">
+  <div class="hero-overlay"></div>
+  <div class="hero-gradient"></div>
+  <div class="container-fluid px-4 hero-body">
+    <p class="hero-eyebrow">🔥 TRENDING</p>
+    <h1 class="hero-title">{{ hero.title }}</h1>
+    <div class="mb-3">
+      {% if hero.type %}<span class="badge me-1 {% if hero.type == 'Movie' %}bg-primary{% else %}bg-purple{% endif %}">{{ hero.type }}</span>{% endif %}
+      {% for g in hero.genres.split(',')[:4] %}<span class="badge bg-secondary me-1">{{ g.strip() }}</span>{% endfor %}
+    </div>
+    <p class="hero-meta">⭐ {{ hero.vote_average }}/10 &nbsp;·&nbsp; {{ hero.year }}</p>
+    <p class="hero-overview">{{ hero.overview[:220] }}…</p>
+  </div>
+</section>
+
+<!-- ── Trending ───────────────────────────────────────────────────────── -->
+<section class="content-section">
+  <h5 class="section-title">Trending Now</h5>
+  <div class="movie-scroll">
+    {% for m in trending %}
+    <div class="scroll-card" onclick='openDetail({{ m|tojson }})'>
+      <div class="position-relative">
+        <img src="{{ m.poster_url }}" alt="{{ m.title }}" class="scroll-poster" loading="lazy"/>
+        <span class="rating-badge">{{ m.vote_average }}★</span>
+      </div>
+      <p class="scroll-title">{{ m.title[:22] }}{% if m.title|length > 22 %}…{% endif %}</p>
+      <p class="scroll-year">{{ m.year }}</p>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+
+{% if mv_list %}
+<!-- ── Movies ─────────────────────────────────────────────────────────── -->
+<section class="content-section">
+  <h5 class="section-title">Top Movies</h5>
+  <div class="movie-scroll">
+    {% for m in mv_list %}
+    <div class="scroll-card" onclick='openDetail({{ m|tojson }})'>
+      <div class="position-relative">
+        <img src="{{ m.poster_url }}" alt="{{ m.title }}" class="scroll-poster" loading="lazy"/>
+        <span class="rating-badge">{{ m.vote_average }}★</span>
+      </div>
+      <p class="scroll-title">{{ m.title[:22] }}{% if m.title|length > 22 %}…{% endif %}</p>
+      <p class="scroll-year">{{ m.year }}</p>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+{% if tv_list %}
+<!-- ── TV Shows ───────────────────────────────────────────────────────── -->
+<section class="content-section">
+  <h5 class="section-title">Top TV Shows</h5>
+  <div class="movie-scroll">
+    {% for m in tv_list %}
+    <div class="scroll-card" onclick='openDetail({{ m|tojson }})'>
+      <div class="position-relative">
+        <img src="{{ m.poster_url }}" alt="{{ m.title }}" class="scroll-poster" loading="lazy"/>
+        <span class="rating-badge">{{ m.vote_average }}★</span>
+      </div>
+      <p class="scroll-title">{{ m.title[:22] }}{% if m.title|length > 22 %}…{% endif %}</p>
+      <p class="scroll-year">{{ m.year }}</p>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+<!-- ── Recommendations ───────────────────────────────────────────────── -->
+<section class="content-section" id="searchSection">
+  <h1 class="text-center fw-black mb-4" id="recHeading">Movie Recommendations</h1>
+  <div class="row justify-content-center">
+    <div class="col-12 col-md-7 col-lg-6 position-relative">
+      <div class="input-group search-group">
+        <input type="text" class="form-control search-input" id="searchInput"
+               placeholder="Type a movie or TV show… e.g. Inception, Breaking Bad"
+               autocomplete="off"/>
+        <button class="btn dice-btn" id="diceBtn" title="Random pick">🎲</button>
+      </div>
+      <ul class="autocomplete-list list-unstyled" id="autocompleteList"></ul>
+      <div id="searchMsg" class="search-msg"></div>
+      <div class="d-flex gap-2 mt-2">
+        <button class="btn btn-danger flex-fill fw-bold" id="findBtn">Find Recommendations</button>
+        <button class="btn btn-outline-secondary d-none" id="addWlBtn">+ Watchlist</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Results ────────────────────────────────────────────────────────── -->
+<section class="content-section d-none" id="resultsSection">
+  <div class="row mb-4 align-items-start" id="selectedCard"></div>
+  <h5 class="section-title">You might also like</h5>
+  <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-5 g-3" id="recGrid"></div>
+</section>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+window.WATCHLIST = {{ session.get('watchlist', [])|tojson }};
+</script>
+{% endblock %}
