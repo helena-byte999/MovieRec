@@ -395,7 +395,56 @@ a { text-decoration: none; }
   font-size: .78rem; color: var(--subtext); margin: 0;
 }
 
-/* (Onboarding styles moved to the onboarding v2 section below) */
+/* ── Onboarding modal overlay ────────────────────────────────────────── */
+.ob-modal-overlay {
+  display: none;
+  position: fixed; inset: 0; z-index: 1100;
+  background: rgba(0,0,0,.75); backdrop-filter: blur(6px);
+  align-items: center; justify-content: center;
+  padding: 1rem;
+}
+.ob-modal {
+  background: var(--card-bg); border: 1px solid var(--border);
+  border-radius: 20px; width: 100%; max-width: 720px;
+  max-height: 90vh; overflow-y: auto;
+  padding: 2rem 2rem 1.5rem;
+  position: relative;
+  box-shadow: 0 32px 80px rgba(0,0,0,.7);
+}
+.ob-modal-close {
+  position: absolute; top: 1rem; right: 1rem;
+  background: rgba(255,255,255,.06); border: 1px solid var(--border);
+  color: var(--subtext); border-radius: 8px; width: 32px; height: 32px;
+  font-size: .85rem; cursor: pointer; transition: all .15s;
+  display: flex; align-items: center; justify-content: center;
+}
+.ob-modal-close:hover { background: rgba(255,255,255,.12); color: var(--text); }
+.ob-modal-badge   { font-size: 2.5rem; text-align: center; margin-bottom: .75rem; }
+.ob-modal-title   { font-size: 1.5rem; font-weight: 900; color: var(--text); text-align: center; margin-bottom: .4rem; }
+.ob-modal-sub     { font-size: .88rem; color: var(--subtext); text-align: center; margin-bottom: 1.25rem; line-height: 1.6; }
+.ob-modal-section-label {
+  font-size: .72rem; font-weight: 800; text-transform: uppercase;
+  letter-spacing: 1.5px; color: var(--subtext); margin-bottom: .75rem;
+}
+.ob-modal-footer  {
+  display: flex; flex-direction: column; align-items: center;
+  gap: .6rem; padding-top: 1.25rem;
+}
+.ob-modal-footer-row { flex-direction: row; justify-content: center; flex-wrap: wrap; }
+.ob-modal-grid    { max-height: 340px; overflow-y: auto; margin-bottom: .5rem; }
+
+/* "How it works" items for guest welcome */
+.ob-how-list  { display: flex; flex-direction: column; gap: .85rem; margin-bottom: 1rem; }
+.ob-how-item  { display: flex; align-items: flex-start; gap: .85rem; }
+.ob-how-icon  { font-size: 1.4rem; flex-shrink: 0; margin-top: .1rem; }
+.ob-how-item strong { display: block; font-size: .9rem; font-weight: 700; color: var(--text); margin-bottom: .15rem; }
+.ob-how-item p { font-size: .82rem; color: var(--subtext); margin: 0; line-height: 1.5; }
+
+@media (max-width: 767.98px) {
+  .ob-modal { padding: 1.5rem 1.25rem 1.25rem; border-radius: 14px; }
+  .ob-modal-title { font-size: 1.25rem; }
+  .ob-modal-grid  { max-height: 260px; }
+}
 
 /* ── Hamburger button ────────────────────────────────────────────────── */
 .hamburger-btn {

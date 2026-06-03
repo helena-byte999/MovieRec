@@ -680,6 +680,25 @@ def get_recs(title, offset=0, limit=20, user_id=None):
     }
 
 
+# ── LGBTQ+ content filter (module-level so both home() and genre_top() share it)
+_LGBTQ_OVERVIEW_KW = {'gay', 'lesbian', 'bisexual', 'transgender', 'queer',
+                       'same-sex', 'lgbtq', 'pride', 'coming out', 'drag'}
+
+def _lgbtq_central(genres_str, overview_str=''):
+    """
+    Exclude kids animation and borderline items with no LGBTQ+ storyline signal.
+    The Simpsons / Peppa Pig are tagged by single episodes — filtered by overview check.
+    """
+    g  = str(genres_str).lower()
+    ov = str(overview_str).lower()
+    if 'animation' in g and any(k in g for k in ('family', 'kids', 'children')):
+        return False
+    if 'animation' in g and 'comedy' in g:
+        if not any(kw in ov for kw in _LGBTQ_OVERVIEW_KW):
+            return False
+    return True
+
+
 # ── Pages ───────────────────────────────────────────────────────────────────
 def _onboarding_picks(pool):
     """Return diverse picks for the onboarding modal (120 titles max)."""
@@ -786,25 +805,6 @@ def home():
                                     (pool['vote_count'].fillna(0) >= 500)],
             sort_col='vote_count')
 
-    _LGBTQ_OVERVIEW_KW = {'gay', 'lesbian', 'bisexual', 'transgender', 'queer',
-                          'same-sex', 'lgbtq', 'pride', 'coming out', 'drag'}
-
-    def _lgbtq_central(genres_str, overview_str=''):
-        """
-        Exclude kids' animation and borderline items whose overview gives no
-        LGBTQ+ storyline signal (e.g. Simpsons tagged by a single episode).
-        """
-        g  = str(genres_str).lower()
-        ov = str(overview_str).lower()
-        # Hard exclude: animation + family/kids/children genre combination
-        if 'animation' in g and any(k in g for k in ('family', 'kids', 'children')):
-            return False
-        # Hard exclude: animation + comedy with no LGBTQ+ storyline in overview
-        if 'animation' in g and 'comedy' in g:
-            if not any(kw in ov for kw in _LGBTQ_OVERVIEW_KW):
-                return False
-        return True
-
     if 'tags' in pool.columns:
         lgbtq_pool = pool[
             pool['tags'].str.contains('lgbtq', case=False, na=False) &
@@ -814,45 +814,18 @@ def home():
         lgbtq_pool = pool.iloc[:0]
     add_row('lgbtq', lgbtq_pool)
 
-    return render_template('index.html', hero=hero, genre_rows=rows, region=region)
+    # Onboarding modal — shown for logged-in users who haven't completed it yet
+    show_ob   = current_user.is_authenticated and not current_user.onboarded
+    ob_picks  = _onboarding_picks(pool) if show_ob else []
+
+    return render_template('index.html', hero=hero, genre_rows=rows, region=region,
+                           show_ob=show_ob, ob_picks=ob_picks)
 
 
 @app.route('/onboarding')
-@login_required
 def onboarding():
-    if current_user.onboarded:
-        return redirect('/')
-    region = _get_region()
-    pool   = get_pool(region)
-    seen   = set()
-    picks  = []
-    # 12 titles from each major genre so genre filter is useful
-    genre_buckets = [
-        ('Action',         ['Action', 'Adventure']),
-        ('Comedy',         ['Comedy']),
-        ('Drama',          ['Drama']),
-        ('Horror',         ['Horror']),
-        ('Sci-Fi',         ['Science Fiction', 'Fantasy']),
-        ('Thriller',       ['Thriller', 'Crime', 'Mystery']),
-        ('Animation',      ['Animation']),
-        ('Romance',        ['Romance']),
-        ('Documentary',    ['Documentary']),
-        ('Family',         ['Family', 'Kids']),
-    ]
-    for genre_label, tags in genre_buckets:
-        sub = pool[pool['genres'].apply(lambda g: any(t in str(g) for t in tags))]
-        for _, row in sub.nlargest(14, 'popularity').iterrows():
-            m = to_dict(row)
-            if m['id'] not in seen and m['poster_url'] != NO_POSTER:
-                seen.add(m['id'])
-                picks.append({**m, 'ob_genre': genre_label})
-    # Fill remaining slots with overall popular titles
-    for _, row in pool.nlargest(40, 'popularity').iterrows():
-        m = to_dict(row)
-        if m['id'] not in seen and m['poster_url'] != NO_POSTER:
-            seen.add(m['id'])
-            picks.append({**m, 'ob_genre': 'Popular'})
-    return render_template('onboarding.html', picks=picks[:120])
+    # Onboarding is now a modal on the homepage; redirect any direct visits
+    return redirect('/')
 
 
 @app.route('/api/onboarding/complete', methods=['POST'])
