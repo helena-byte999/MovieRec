@@ -77,31 +77,31 @@
   {% endif %}
 
   <!-- ── Watch History ─────────────────────────────────────────────── -->
-  {% if watched %}
-  <hr class="my-5"/>
-  <h4 class="fw-black mb-1">🎬 {{ t.watch_history | default('Watch History') }}</h4>
-  <p class="text-muted small mb-3">{{ watched|length }} {{ t.titles_watched | default('titles watched') }}</p>
-  <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-6 g-3">
-    {% for w in watched %}
-    <div class="col">
-      <div class="watched-card">
-        <div class="position-relative">
-          <img src="{{ w.poster_url or 'https://placehold.co/300x450/1a1a2e/59005c?text=No+Image' }}"
-               alt="{{ w.title }}" class="card-poster w-100" loading="lazy"/>
-          <div class="watched-overlay">✓</div>
-        </div>
-        <div class="card-info">
-          <p class="card-name" title="{{ w.title }}">{{ w.title }}</p>
-          <p class="card-meta-text">{{ w.year }} · ⭐ {{ w.rating }}</p>
-          <p class="card-meta-text" style="font-size:.65rem;color:var(--subtext)">
-            {{ w.watched_at.strftime('%b %d, %Y') }}
-          </p>
+  <div id="historySection" {% if not watched %}style="display:none"{% endif %}>
+    <hr class="my-5"/>
+    <h4 class="fw-black mb-1">🎬 {{ t.watch_history | default('Watch History') }}</h4>
+    <p class="text-muted small mb-3" id="historyCount">{{ watched|length }} {{ t.titles_watched | default('titles watched') }}</p>
+    <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-6 g-3" id="historyGrid">
+      {% for w in watched %}
+      <div class="col">
+        <div class="watched-card">
+          <div class="position-relative">
+            <img src="{{ w.poster_url or 'https://placehold.co/300x450/1a1a2e/59005c?text=No+Image' }}"
+                 alt="{{ w.title }}" class="card-poster w-100" loading="lazy"/>
+            <div class="watched-overlay">✓</div>
+          </div>
+          <div class="card-info">
+            <p class="card-name" title="{{ w.title }}">{{ w.title }}</p>
+            <p class="card-meta-text">{{ w.year }} · ⭐ {{ w.rating }}</p>
+            <p class="card-meta-text" style="font-size:.65rem;color:var(--subtext)">
+              {{ w.watched_at.strftime('%b %d, %Y') }}
+            </p>
+          </div>
         </div>
       </div>
+      {% endfor %}
     </div>
-    {% endfor %}
   </div>
-  {% endif %}
 </div>
 {% endblock %}
 
