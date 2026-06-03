@@ -109,113 +109,43 @@
   </div>
 </section>
 
-<!-- ── Onboarding / Welcome Modal (must be inside block content) ────── -->
+<!-- ── Welcome / Instruction Modal (inside block content) ─────────────── -->
 <div class="ob-overlay" id="obOverlay" data-show-ob="{{ 'true' if show_ob else 'false' }}">
   <div class="ob-shell" id="obModal">
-
-    {% if show_ob %}
-    {# ── Step 1: genre picker (logged-in, not onboarded) ─────────────── #}
-    <div class="ob-pane" id="obModalStep1">
-      <button class="ob-x" onclick="closeObModal()">✕</button>
-      <div class="ob-glow"></div>
-
-      <!-- Fanned poster cards — hero visual -->
-      <div class="ob-fan">
-        {% for m in ob_picks[:5] %}
-        <div class="ob-fan-card">
-          <img src="{{ m.poster_url }}" alt=""
-               onerror="this.parentElement.style.background='#1a1a2e'"/>
-        </div>
-        {% endfor %}
-      </div>
-
-      <span class="ob-chip">🎬 Personalised just for you</span>
-      <h1 class="ob-hl">Find films <span class="ob-hl-grad">made for you.</span></h1>
-      <p class="ob-sub">Tell us what you love — takes 30 seconds.</p>
-
-      <p class="ob-label">What genres do you enjoy?</p>
-      <div class="ob-genres">
-        {% for genre, emoji in [('Action','💥'),('Comedy','😂'),('Drama','🎭'),('Horror','👻'),
-          ('Sci-Fi','🚀'),('Thriller','🔪'),('Romance','💕'),('Animation','✨'),
-          ('Documentary','🎥'),('Crime','🕵️'),('Fantasy','🧙'),('Family','👨‍👩‍👧')] %}
-        <button class="ob-genre-btn" data-genre="{{ genre }}" onclick="toggleObGenre(this)">
-          <span class="ob-genre-emoji">{{ emoji }}</span>
-          <span class="ob-genre-name">{{ genre }}</span>
-        </button>
-        {% endfor %}
-      </div>
-
-      <div class="ob-actions">
-        <button class="ob-cta" onclick="goObStep2()">Continue →</button>
-        <button class="ob-skip" onclick="closeObModal()">Skip for now</button>
-      </div>
-    </div>
-
-    {# ── Step 2: title picker ─────────────────────────────────────────── #}
-    <div class="ob-pane d-none" id="obModalStep2">
-      <button class="ob-x" onclick="closeObModal()">✕</button>
-
-      <span class="ob-chip">Step 2 of 2</span>
-      <h1 class="ob-hl ob-hl-sm">Which of these<br><span class="ob-hl-grad">have you seen?</span></h1>
-      <p class="ob-sub">Pick at least 5 to unlock your personalised feed.</p>
-      <p class="ob-counter"><span id="obPickCount">0</span> selected<span id="obPickHint" class="ob-hint"> — pick at least 5</span></p>
-
-      <div class="ob-filter-bar" id="obModalFilterBar">
-        <button class="ob-filter-pill active" data-filter="all" onclick="obFilter(this,'all')">All</button>
-        <button class="ob-filter-pill" data-filter="Popular" onclick="obFilter(this,'Popular')">Popular</button>
-        {% set gseen = [] %}
-        {% for m in ob_picks %}
-          {% if m.ob_genre not in gseen and m.ob_genre != 'Popular' %}
-            {% if gseen.append(m.ob_genre) %}{% endif %}
-            <button class="ob-filter-pill" data-filter="{{ m.ob_genre }}"
-                    onclick="obFilter(this,'{{ m.ob_genre }}')">{{ m.ob_genre }}</button>
-          {% endif %}
-        {% endfor %}
-      </div>
-
-      <div class="ob-pick-grid" id="obModalGrid">
-        {% for m in ob_picks %}
-        <div class="ob-pick-card" data-title="{{ m.title|e }}" data-genre="{{ m.ob_genre }}"
-             onclick="toggleObPick(this)">
-          <img src="{{ m.poster_url }}" alt="{{ m.title|e }}" loading="lazy"
-               onerror="this.src='https://placehold.co/300x450/1a1a2e/59005c?text=No+Image'"/>
-          <div class="ob-pick-check">✓</div>
-          <p class="ob-pick-title">{{ m.title[:20] }}{% if m.title|length > 20 %}…{% endif %}</p>
-        </div>
-        {% endfor %}
-      </div>
-
-      <div class="ob-actions ob-actions-row">
-        <button class="ob-back" onclick="goObStep1()">← Back</button>
-        <button class="ob-cta" id="obDoneBtn" disabled onclick="completeObModal()">Let's go →</button>
-        <button class="ob-skip" onclick="closeObModal()">Skip</button>
-      </div>
-    </div>
-
-    {% else %}
-    {# ── Guest welcome ────────────────────────────────────────────────── #}
-    <div class="ob-pane" id="obWelcome">
+    <div class="ob-pane">
       <button class="ob-x" onclick="closeObModal()">✕</button>
       <div class="ob-glow"></div>
 
       <span class="ob-chip">🎬 MOV.IE REC</span>
       <h1 class="ob-hl">Your personal <span class="ob-hl-grad">film recommender.</span></h1>
-      <p class="ob-sub">AI-powered. Personalised to your taste. Completely free.</p>
+      <p class="ob-sub">AI-powered recommendations, personalised to your taste. Here's how to get started:</p>
 
       <div class="ob-feats">
-        <div class="ob-feat"><span class="ob-feat-icon">🔍</span><div><strong>Search any title</strong><p>Type a movie or show — we find what to watch next.</p></div></div>
-        <div class="ob-feat"><span class="ob-feat-icon">🎲</span><div><strong>Random pick</strong><p>Hit the dice for a surprise recommendation.</p></div></div>
-        <div class="ob-feat"><span class="ob-feat-icon">📋</span><div><strong>Build your Watchlist</strong><p>Save titles — sign up to keep your list forever.</p></div></div>
-        <div class="ob-feat"><span class="ob-feat-icon">🎭</span><div><strong>Browse by genre</strong><p>Action, Drama, LGBTQ+, K-Drama and more.</p></div></div>
+        <div class="ob-feat">
+          <span class="ob-feat-icon">🔍</span>
+          <div><strong>Search any title</strong><p>Type a movie or show you already like — we instantly find what to watch next.</p></div>
+        </div>
+        <div class="ob-feat">
+          <span class="ob-feat-icon">🎲</span>
+          <div><strong>Random pick</strong><p>Hit the dice button for a surprise recommendation based on top-rated content.</p></div>
+        </div>
+        <div class="ob-feat">
+          <span class="ob-feat-icon">🎭</span>
+          <div><strong>Browse by genre</strong><p>Select genres like Action, LGBTQ+, K-Drama or Documentary from the search bar.</p></div>
+        </div>
+        <div class="ob-feat">
+          <span class="ob-feat-icon">📋</span>
+          <div><strong>Build your Watchlist</strong><p>Save titles to watch later — sign up to keep your list across devices.</p></div>
+        </div>
       </div>
 
       <div class="ob-actions">
-        <button class="ob-cta" onclick="closeObModal()">Start exploring</button>
-        <a href="/auth/register" class="ob-register-link">Create free account →</a>
+        <button class="ob-cta" onclick="closeObModal()">Start exploring →</button>
+        {% if not current_user.is_authenticated %}
+        <a href="/auth/register" class="ob-register-link">Create free account</a>
+        {% endif %}
       </div>
     </div>
-    {% endif %}
-
   </div>
 </div>
 
@@ -268,77 +198,28 @@ fetch('/api/trending_live')
   })
   .catch(() => {});
 
-/* ── Onboarding / welcome modal ──────────────────────────────────────── */
+/* ── Welcome modal ───────────────────────────────────────────────────── */
 (function() {
-  const overlay  = document.getElementById('obOverlay');
-  const showOb   = overlay && overlay.dataset.showOb === 'true';
+  const ov     = document.getElementById('obOverlay');
+  const showOb = ov && ov.dataset.showOb === 'true';
   if (showOb || !localStorage.getItem('movierec_welcome_seen')) {
-    overlay && (overlay.style.display = 'flex');
+    ov && (ov.style.display = 'flex');
   }
 })();
 
-const _obSelected = new Set();
-const _obGenres   = new Set();
-
 function closeObModal() {
-  const ov = document.getElementById('obOverlay');
+  const ov     = document.getElementById('obOverlay');
+  const showOb = ov && ov.dataset.showOb === 'true';
   if (ov) ov.style.display = 'none';
   localStorage.setItem('movierec_welcome_seen', '1');
-}
-
-function toggleObGenre(btn) {
-  const g = btn.dataset.genre;
-  _obGenres.has(g) ? _obGenres.delete(g) : _obGenres.add(g);
-  btn.classList.toggle('ob-genre-selected', _obGenres.has(g));
-}
-
-function goObStep2() {
-  document.getElementById('obModalStep1').classList.add('d-none');
-  document.getElementById('obModalStep2').classList.remove('d-none');
-  if (_obGenres.size > 0) {
-    const pill = document.querySelector(`#obModalFilterBar .ob-filter-pill[data-filter="${[..._obGenres][0]}"]`);
-    if (pill) obFilter(pill, [..._obGenres][0]);
+  // Mark logged-in user as onboarded so modal doesn't reappear
+  if (showOb) {
+    fetch('/api/onboarding/complete', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({titles: []})
+    }).catch(() => {});
   }
-  document.getElementById('obModal').scrollTop = 0;
-}
-
-function goObStep1() {
-  document.getElementById('obModalStep2').classList.add('d-none');
-  document.getElementById('obModalStep1').classList.remove('d-none');
-  document.getElementById('obModal').scrollTop = 0;
-}
-
-function obFilter(btn, filter) {
-  document.querySelectorAll('#obModalFilterBar .ob-filter-pill').forEach(p => p.classList.remove('active'));
-  btn.classList.add('active');
-  document.querySelectorAll('#obModalGrid .ob-pick-card').forEach(c => {
-    c.style.display = (filter === 'all' || c.dataset.genre === filter) ? '' : 'none';
-  });
-}
-
-function toggleObPick(card) {
-  const t = card.dataset.title;
-  _obSelected.has(t) ? _obSelected.delete(t) : _obSelected.add(t);
-  card.classList.toggle('ob-picked', _obSelected.has(t));
-  const n   = _obSelected.size;
-  const el  = document.getElementById('obPickCount');
-  const hint= document.getElementById('obPickHint');
-  const btn = document.getElementById('obDoneBtn');
-  if (el)   el.textContent = n;
-  if (hint) hint.style.display = n >= 5 ? 'none' : '';
-  if (btn)  btn.disabled = n < 5;
-}
-
-function completeObModal() {
-  const btn = document.getElementById('obDoneBtn');
-  btn.disabled = true; btn.textContent = 'Saving…';
-  fetch('/api/onboarding/complete', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({titles: [..._obSelected]})
-  })
-  .then(() => { closeObModal(); location.reload(); })
-  .catch(() => { btn.disabled = false; btn.textContent = "Let's go →"; });
 }
 </script>
 {% endblock %}

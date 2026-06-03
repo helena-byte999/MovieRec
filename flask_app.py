@@ -837,12 +837,9 @@ def home():
     # Genre rows — cached per (region, lang) for 5 minutes
     rows = _cached_genre_rows(region, lang, pool, tr)
 
-    # Onboarding modal data — only computed for users who haven't onboarded yet
-    show_ob  = current_user.is_authenticated and not current_user.onboarded
-    ob_picks = _onboarding_picks(pool) if show_ob else []
-
+    show_ob = current_user.is_authenticated and not current_user.onboarded
     return render_template('index.html', hero=hero, genre_rows=rows, region=region,
-                           show_ob=show_ob, ob_picks=ob_picks)
+                           show_ob=show_ob)
 
 
 @app.route('/onboarding')
