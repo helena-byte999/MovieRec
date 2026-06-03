@@ -768,11 +768,46 @@ function markWatched(title, posterUrl, year, type, rating, cardId) {
   }).then(() => {
     window.WATCHLIST = window.WATCHLIST.filter(t => t !== title);
     showToast(`"${title}" ✓ marked as watched!`, '🎬', 'success');
-    // Update count
+
+    // Update watchlist count badge
     const countEl = document.querySelector('h1 .fw-normal');
     if (countEl) {
       const cur = parseInt(countEl.textContent.match(/\d+/)?.[0] || 1);
       countEl.textContent = `(${Math.max(0, cur - 1)} ${window.T?.saved || 'saved'})`;
+    }
+
+    // Inject card into Watch History section immediately
+    const historySection = document.getElementById('historySection');
+    const historyGrid    = document.getElementById('historyGrid');
+    if (historyGrid) {
+      const today = new Date().toLocaleDateString('en-GB', { month:'short', day:'numeric', year:'numeric' });
+      const col   = document.createElement('div');
+      col.className = 'col';
+      col.innerHTML = `
+        <div class="watched-card">
+          <div class="position-relative">
+            <img src="${posterUrl || 'https://placehold.co/300x450/1a1a2e/59005c?text=No+Image'}"
+                 alt="${title}" class="card-poster w-100" loading="lazy"
+                 onerror="this.src='https://placehold.co/300x450/1a1a2e/59005c?text=No+Image'"/>
+            <div class="watched-overlay">✓</div>
+          </div>
+          <div class="card-info">
+            <p class="card-name" title="${title}">${title}</p>
+            <p class="card-meta-text">${year} · ⭐ ${rating}</p>
+            <p class="card-meta-text" style="font-size:.65rem;color:var(--subtext)">${today}</p>
+          </div>
+        </div>`;
+      historyGrid.prepend(col);
+
+      // Show section if it was hidden (first ever watched item)
+      if (historySection) historySection.style.display = '';
+
+      // Update history count
+      const histCount = document.getElementById('historyCount');
+      if (histCount) {
+        const cur = parseInt(histCount.textContent.match(/\d+/)?.[0] || 0);
+        histCount.textContent = `${cur + 1} ${window.T?.titles_watched || 'titles watched'}`;
+      }
     }
   });
 }
