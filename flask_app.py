@@ -680,23 +680,44 @@ def get_recs(title, offset=0, limit=20, user_id=None):
     }
 
 
-# ── LGBTQ+ content filter (module-level so both home() and genre_top() share it)
-_LGBTQ_OVERVIEW_KW = {'gay', 'lesbian', 'bisexual', 'transgender', 'queer',
-                       'same-sex', 'lgbtq', 'pride', 'coming out', 'drag'}
+# ── LGBTQ+ dataset signals ───────────────────────────────────────────────────
+# Broad regex applied to the `tags` column (TMDB keyword names stored at build time)
+_LGBTQ_TAG_RE = (
+    r'lgbtq|lgbt(?!\+)|lesbian|bisexual|transgender|\btrans\b|queer|'
+    r'homosexual|same.sex|coming.out|drag.queen|\bgay\b'
+)
+# Regex applied to the `overview` / plot description field
+_LGBTQ_OV_RE  = (
+    r'\bgay\b|\blesbians?\b|\bbisexual\b|\btransgender\b|\btrans\b|'
+    r'\bqueer\b|lgbtq|same.sex|coming out|drag queen|homosexual'
+)
+# Genres that flag children's content — the only hard exclusion
+_KIDS_GENRES = ('family', 'kids', 'children')
+
 
 def _lgbtq_central(genres_str, overview_str=''):
+    """Exclude clear children's content from the LGBTQ+ row."""
+    g = str(genres_str).lower()
+    return not any(k in g for k in _KIDS_GENRES)
+
+
+def _lgbtq_pool(pool):
     """
-    Exclude kids animation and borderline items with no LGBTQ+ storyline signal.
-    The Simpsons / Peppa Pig are tagged by single episodes — filtered by overview check.
+    Return the LGBTQ+ subset of `pool` using dataset signals only — no external API.
+    Uses the tags column (TMDB keyword names) OR overview text, whichever fires.
+    Excludes Family/Kids/Children genres; everything else is in scope.
     """
-    g  = str(genres_str).lower()
-    ov = str(overview_str).lower()
-    if 'animation' in g and any(k in g for k in ('family', 'kids', 'children')):
-        return False
-    if 'animation' in g and 'comedy' in g:
-        if not any(kw in ov for kw in _LGBTQ_OVERVIEW_KW):
-            return False
-    return True
+    if 'tags' in pool.columns:
+        by_tag = pool['tags'].str.contains(_LGBTQ_TAG_RE, case=False, na=False, regex=True)
+    else:
+        by_tag = pool['title'].apply(lambda _: False)   # empty boolean mask
+
+    by_ov = pool['overview'].str.contains(_LGBTQ_OV_RE, case=False, na=False, regex=True)
+
+    not_kids = ~pool['genres'].apply(
+        lambda g: any(k in str(g).lower() for k in _KIDS_GENRES)
+    )
+    return pool[(by_tag | by_ov) & not_kids]
 
 
 # ── Pages ───────────────────────────────────────────────────────────────────
@@ -805,14 +826,7 @@ def home():
                                     (pool['vote_count'].fillna(0) >= 500)],
             sort_col='vote_count')
 
-    if 'tags' in pool.columns:
-        lgbtq_pool = pool[
-            pool['tags'].str.contains('lgbtq', case=False, na=False) &
-            pool.apply(lambda r: _lgbtq_central(r.get('genres', ''), r.get('overview', '')), axis=1)
-        ]
-    else:
-        lgbtq_pool = pool.iloc[:0]
-    add_row('lgbtq', lgbtq_pool)
+    add_row('lgbtq', _lgbtq_pool(pool))
 
     # Onboarding modal — shown for logged-in users who haven't completed it yet
     show_ob   = current_user.is_authenticated and not current_user.onboarded
@@ -972,8 +986,6 @@ def tv_info(tmdb_id):
         return jsonify({'seasons': 0, 'episodes': 0, 'status': '', 'network': '', 'season_list': []})
 
 
-LGBTQ_KW = '5720|6513|14226|155341|256428'  # OR: any one LGBTQ keyword match is enough
-
 @app.route('/api/genre_top')
 def genre_top():
     genres = request.args.getlist('genres[]') or ([request.args.get('genre', '')] if request.args.get('genre') else [])
@@ -986,74 +998,11 @@ def genre_top():
 
     genre = genres[0] if len(genres) == 1 else None
     if 'LGBTQ+' in genres:
-        if 'tags' in pool.columns:
-            # Apply the same adult-content guard used on the home row
-            subset = pool[
-                pool['tags'].str.contains('lgbtq', case=False, na=False) &
-                pool.apply(lambda r: _lgbtq_central(r.get('genres', ''), r.get('overview', '')), axis=1)
-            ]
-        else:
-            subset = pool.iloc[:0]
-        if len(subset) >= 4:
-            items = [to_dict(r) for _, r in subset.nlargest(20, 'popularity').iterrows()]
-            return jsonify({'items': items, 'has_more': False, 'offset': len(items)})
-        # Live TMDB fallback — strict quality + age filters so kids shows don't appear
-        try:
-            mt = 'tv' if media == 'TV Show' else 'movie'
-            raw = requests.get(f"https://api.themoviedb.org/3/discover/{mt}",
-                params={
-                    'api_key':        TMDB_KEY,
-                    'with_keywords':  LGBTQ_KW,
-                    'sort_by':        'popularity.desc',
-                    'vote_count.gte': 200,            # raises bar above niche/kids content
-                    'vote_average.gte': 6.0,          # quality floor
-                    'without_genres': '10751,10762',  # exclude Family, Kids
-                }, timeout=5).json()
-            gmap = {g['id']: g['name'] for g in requests.get(
-                f"https://api.themoviedb.org/3/genre/{mt}/list",
-                params={'api_key': TMDB_KEY}, timeout=3).json().get('genres', [])}
-            nk = 'title' if mt == 'movie' else 'name'
-            dk = 'release_date' if mt == 'movie' else 'first_air_date'
-            # Genre IDs that flag kids/family content
-            KIDS_GIDS = {10751, 10762}   # Family, Kids
-            LGBTQ_OVERVIEW = {'gay', 'lesbian', 'bisexual', 'transgender', 'queer',
-                               'same-sex', 'lgbtq', 'pride', 'coming out', 'drag'}
-            out = []
-            for item in raw.get('results', []):
-                gids = set(item.get('genre_ids', []))
-                # Skip anything still tagged Family/Kids or Animation+Comedy
-                if gids & KIDS_GIDS:
-                    continue
-                if 16 in gids and 35 in gids:  # Animation + Comedy = likely kids
-                    continue
-                # Prefer items whose overview mentions LGBTQ+ themes
-                overview = str(item.get('overview', '')).lower()
-                has_lgbtq_story = any(kw in overview for kw in LGBTQ_OVERVIEW)
-                if not has_lgbtq_story and _safe_float(item.get('vote_average', 0)) < 7.0:
-                    continue  # skip borderline items without storyline signals
-                gnames = ', '.join(gmap.get(gid, '') for gid in item.get('genre_ids', []) if gmap.get(gid))
-                pp = item.get('poster_path', '') or ''
-                bp = item.get('backdrop_path', '') or ''
-                out.append({
-                    'id':           item['id'],
-                    'title':        item.get(nk, ''),
-                    'type':         'Movie' if mt == 'movie' else 'TV Show',
-                    'genres':       gnames,
-                    'overview':     item.get('overview', ''),
-                    'vote_average': round(_safe_float(item.get('vote_average', 0)), 1),
-                    'vote_count':   _safe_int(item.get('vote_count', 0)),
-                    'popularity':   round(_safe_float(item.get('popularity', 0)), 1),
-                    'year':         str(item.get(dk, ''))[:4],
-                    'poster_url':   f"{POSTER_BASE}{pp}" if pp else NO_POSTER,
-                    'backdrop_url': f"{BACKDROP_BASE}{bp}" if bp else '',
-                    'original_language': item.get('original_language', ''),
-                    'is_lgbtq': True,
-                })
-                if len(out) >= 20:
-                    break
-            return jsonify({'items': out, 'has_more': False, 'offset': len(out)})
-        except Exception:
-            return jsonify({'items': [], 'has_more': False, 'offset': 0})
+        subset = _lgbtq_pool(pool)
+        if media in ('Movie', 'TV Show') and has_type:
+            subset = subset[subset['type'] == media]
+        items = [to_dict(r) for _, r in subset.nlargest(20, 'popularity').iterrows()]
+        return jsonify({'items': items, 'has_more': False, 'offset': len(items)})
 
     subset = pool[pool['genres'].apply(lambda g: any(gen in str(g) for gen in genres))]
     if media in ('Movie', 'TV Show') and has_type:
