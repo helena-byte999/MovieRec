@@ -109,9 +109,7 @@
   </div>
 </section>
 
-{% endblock %}
-
-<!-- ── Onboarding / Welcome Modal ────────────────────────────────────── -->
+<!-- ── Onboarding / Welcome Modal (must be inside block content) ────── -->
 <div class="ob-modal-overlay" id="obOverlay" data-show-ob="{{ 'true' if show_ob else 'false' }}">
   <div class="ob-modal" id="obModal">
 
@@ -198,6 +196,8 @@
 
   </div>
 </div>
+
+{% endblock %}
 
 {% block scripts %}
 <script id="wl-data" type="application/json">{{ wl_titles|tojson }}</script>
