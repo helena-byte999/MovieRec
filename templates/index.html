@@ -20,6 +20,38 @@
   </div>
 </section>
 
+<!-- ── Recommender ────────────────────────────────────────────────────── -->
+<section class="content-section" id="searchSection">
+  <h1 class="text-center fw-black mb-4" id="recHeading">{{ t.recommender_title }}</h1>
+  <div class="row justify-content-center">
+    <div class="col-12 col-md-8 col-lg-7 position-relative">
+      <!-- Multi-genre picker -->
+      <div class="mb-3">
+        <p class="genre-picker-label">{{ t.genre_placeholder }}</p>
+        <div class="genre-picker" id="genrePicker">
+          {% for g in ['Action','Adventure','Animation','Comedy','Crime','Documentary',
+                       'Drama','Family','Fantasy','History','Horror','LGBTQ+',
+                       'Music','Mystery','Romance','Science Fiction','Thriller','War','Western'] %}
+          <button class="genre-pick-pill" data-genre="{{ g }}" type="button">{{ g }}</button>
+          {% endfor %}
+        </div>
+        <div id="selectedGenresDisplay"></div>
+      </div>
+      <div class="input-group search-group">
+        <input type="text" class="form-control search-input" id="searchInput"
+               placeholder="{{ t.search_placeholder }}" autocomplete="off"/>
+        <button class="btn dice-btn" id="diceBtn" title="Random pick">🎲</button>
+      </div>
+      <ul class="autocomplete-list list-unstyled" id="autocompleteList"></ul>
+      <div id="searchMsg" class="search-msg"></div>
+      <div class="d-flex gap-2 mt-2">
+        <button class="btn btn-danger flex-fill fw-bold" id="findBtn">{{ t.find_recs }}</button>
+        <button class="btn btn-outline-secondary d-none" id="addWlBtn">{{ t.add_watchlist }}</button>
+      </div>
+    </div>
+  </div>
+</section>
+
 <!-- ── Live trending row (injected by JS) ────────────────────────────── -->
 <section class="content-section" id="liveSection" style="display:none">
   <h5 class="section-title" id="liveSectionTitle"></h5>
@@ -56,38 +88,6 @@
   </div>
 </section>
 {% endfor %}
-
-<!-- ── Recommender ────────────────────────────────────────────────────── -->
-<section class="content-section" id="searchSection">
-  <h1 class="text-center fw-black mb-4" id="recHeading">{{ t.recommender_title }}</h1>
-  <div class="row justify-content-center">
-    <div class="col-12 col-md-8 col-lg-7 position-relative">
-      <!-- Multi-genre picker -->
-      <div class="mb-3">
-        <p class="genre-picker-label">{{ t.genre_placeholder }}</p>
-        <div class="genre-picker" id="genrePicker">
-          {% for g in ['Action','Adventure','Animation','Comedy','Crime','Documentary',
-                       'Drama','Family','Fantasy','History','Horror','LGBTQ+',
-                       'Music','Mystery','Romance','Science Fiction','Thriller','War','Western'] %}
-          <button class="genre-pick-pill" data-genre="{{ g }}" type="button">{{ g }}</button>
-          {% endfor %}
-        </div>
-        <div id="selectedGenresDisplay"></div>
-      </div>
-      <div class="input-group search-group">
-        <input type="text" class="form-control search-input" id="searchInput"
-               placeholder="{{ t.search_placeholder }}" autocomplete="off"/>
-        <button class="btn dice-btn" id="diceBtn" title="Random pick">🎲</button>
-      </div>
-      <ul class="autocomplete-list list-unstyled" id="autocompleteList"></ul>
-      <div id="searchMsg" class="search-msg"></div>
-      <div class="d-flex gap-2 mt-2">
-        <button class="btn btn-danger flex-fill fw-bold" id="findBtn">{{ t.find_recs }}</button>
-        <button class="btn btn-outline-secondary d-none" id="addWlBtn">{{ t.add_watchlist }}</button>
-      </div>
-    </div>
-  </div>
-</section>
 
 <!-- ── Browse results (pick a title) ────────────────────────────────── -->
 <section class="content-section d-none" id="browseSection">
