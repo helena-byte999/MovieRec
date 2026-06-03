@@ -7,7 +7,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from authlib.integrations.flask_client import OAuth
 from datetime import datetime
 from dotenv import load_dotenv
-import pickle, os, secrets
+import pickle, os, secrets, time, re
 import numpy as np
 import requests
 
@@ -680,44 +680,111 @@ def get_recs(title, offset=0, limit=20, user_id=None):
     }
 
 
-# ── LGBTQ+ dataset signals ───────────────────────────────────────────────────
-# Broad regex applied to the `tags` column (TMDB keyword names stored at build time)
-_LGBTQ_TAG_RE = (
+# ── LGBTQ+ dataset signals (compiled once at startup) ────────────────────────
+_LGBTQ_TAG_PAT = re.compile(
     r'lgbtq|lgbt(?!\+)|lesbian|bisexual|transgender|\btrans\b|queer|'
-    r'homosexual|same.sex|coming.out|drag.queen|\bgay\b'
+    r'homosexual|same.sex|coming.out|drag.queen|\bgay\b', re.IGNORECASE
 )
-# Regex applied to the `overview` / plot description field
-_LGBTQ_OV_RE  = (
+_LGBTQ_OV_PAT = re.compile(
     r'\bgay\b|\blesbians?\b|\bbisexual\b|\btransgender\b|\btrans\b|'
-    r'\bqueer\b|lgbtq|same.sex|coming out|drag queen|homosexual'
+    r'\bqueer\b|lgbtq|same.sex|coming out|drag queen|homosexual', re.IGNORECASE
 )
-# Genres that flag children's content — the only hard exclusion
-_KIDS_GENRES = ('family', 'kids', 'children')
+_KIDS_GENRE_PAT = re.compile(r'\b(family|kids|children)\b', re.IGNORECASE)
 
 
 def _lgbtq_central(genres_str, overview_str=''):
     """Exclude clear children's content from the LGBTQ+ row."""
-    g = str(genres_str).lower()
-    return not any(k in g for k in _KIDS_GENRES)
+    return not bool(_KIDS_GENRE_PAT.search(str(genres_str)))
 
 
 def _lgbtq_pool(pool):
     """
-    Return the LGBTQ+ subset of `pool` using dataset signals only — no external API.
-    Uses the tags column (TMDB keyword names) OR overview text, whichever fires.
-    Excludes Family/Kids/Children genres; everything else is in scope.
+    LGBTQ+ subset using dataset signals only — no external API.
+    Vectorised str.contains for speed; excludes Family/Kids/Children genres.
     """
     if 'tags' in pool.columns:
-        by_tag = pool['tags'].str.contains(_LGBTQ_TAG_RE, case=False, na=False, regex=True)
+        by_tag = pool['tags'].str.contains(_LGBTQ_TAG_PAT, na=False)
     else:
-        by_tag = pool['title'].apply(lambda _: False)   # empty boolean mask
+        by_tag = pool['title'].apply(lambda _: False)
 
-    by_ov = pool['overview'].str.contains(_LGBTQ_OV_RE, case=False, na=False, regex=True)
-
-    not_kids = ~pool['genres'].apply(
-        lambda g: any(k in str(g).lower() for k in _KIDS_GENRES)
-    )
+    by_ov    = pool['overview'].str.contains(_LGBTQ_OV_PAT, na=False)
+    not_kids = ~pool['genres'].str.contains(_KIDS_GENRE_PAT, na=False)
     return pool[(by_tag | by_ov) & not_kids]
+
+
+# ── Home-page row cache (in-process, per region+language, 5-min TTL) ─────────
+_ROW_CACHE: dict = {}
+_ROW_CACHE_TTL   = 300  # seconds
+
+
+def _cached_genre_rows(region, lang, pool, tr):
+    key   = f"{region}:{lang}"
+    entry = _ROW_CACHE.get(key)
+    if entry and (time.time() - entry['at']) < _ROW_CACHE_TTL:
+        return entry['rows']
+    rows = _build_genre_rows(pool, tr, region)
+    _ROW_CACHE[key] = {'rows': rows, 'at': time.time()}
+    return rows
+
+
+def _build_genre_rows(pool, tr, region):
+    """Compute all genre rows for the home page. Cached by _cached_genre_rows."""
+    rows = []
+
+    def add_row(key, subset, **kwargs):
+        result = build_row(tr[key], subset, **kwargs)
+        if result:
+            result['key'] = key
+            rows.append(result)
+
+    add_row('trending_now', pool)
+
+    recent = pool[pool['release_date'].apply(lambda d: str(d)[:4] >= '2024')]
+    recent_sorted = recent.sort_values('release_date', ascending=False).head(20)
+    if len(recent_sorted) >= 4:
+        rows.append({'label': tr['new_releases'], 'key': 'new_releases',
+                     'cards': [to_dict(r) for _, r in recent_sorted.iterrows()]})
+
+    if has_type:
+        add_row('top_movies', pool[pool['type'] == 'Movie'])
+        add_row('top_tv',     pool[pool['type'] == 'TV Show'])
+
+    for key, tags in GENRE_ROWS:
+        subset = pool[pool['genres'].apply(lambda g: any(tag in str(g) for tag in tags))]
+        add_row(key, subset)
+
+    has_origin = 'origin_country' in pool.columns
+    african_pool = pool[pool['original_language'].isin(AFRICAN_LANGS)]
+    if has_origin:
+        african_pool = pool[
+            pool['original_language'].isin(AFRICAN_LANGS) |
+            pool['origin_country'].isin(AFRICAN_COUNTRIES)
+        ]
+    add_row('african_stories', african_pool)
+
+    if has_origin:
+        nollywood_pool = pool[pool['origin_country'] == 'NG']
+        if len(nollywood_pool) >= 4:
+            result = build_row(tr.get('nollywood', 'Nollywood'), nollywood_pool)
+            if result:
+                result['key'] = 'nollywood'
+                rows.append(result)
+        sa_pool = pool[pool['origin_country'] == 'ZA']
+        if len(sa_pool) >= 4:
+            result = build_row(tr.get('south_african', 'South African Cinema'), sa_pool)
+            if result:
+                result['key'] = 'south_african'
+                rows.append(result)
+
+    add_row('kdrama',     pool[pool['original_language'] == 'ko'])
+    add_row('anime',      pool[(pool['original_language'] == 'ja') &
+                               pool['genres'].apply(lambda g: 'Animation' in str(g))])
+    add_row('bollywood',  pool[pool['original_language'] == 'hi'])
+    add_row('acclaimed',  pool[(pool['vote_average'].fillna(0) >= 8.0) &
+                               (pool['vote_count'].fillna(0) >= 500)],
+            sort_col='vote_count')
+    add_row('lgbtq',      _lgbtq_pool(pool))
+    return rows
 
 
 # ── Pages ───────────────────────────────────────────────────────────────────
@@ -758,79 +825,21 @@ def home():
     lang   = _get_language()
     tr     = TRANSLATIONS.get(lang, TRANSLATIONS['en'])
     pool   = get_pool(region)
-    hero   = to_dict(pool.nlargest(1, 'popularity').iloc[0])
+
+    # Hero — fast single nlargest; translated overview only when needed
+    hero = to_dict(pool.nlargest(1, 'popularity').iloc[0])
     if lang != 'en':
         translated = get_translated_overview(hero['id'], hero['type'] == 'TV Show', lang)
         if translated:
             hero = dict(hero)
             hero['overview'] = translated
-    rows   = []
 
-    def add_row(key, subset, **kwargs):
-        result = build_row(tr[key], subset, **kwargs)
-        if result:
-            result['key'] = key
-            rows.append(result)
+    # Genre rows — cached per (region, lang) for 5 minutes
+    rows = _cached_genre_rows(region, lang, pool, tr)
 
-    add_row('trending_now', pool)
-
-    # New Releases — 2024+ content sorted by release date
-    recent = pool[pool['release_date'].apply(lambda d: str(d)[:4] >= '2024')]
-    recent_sorted = recent.sort_values('release_date', ascending=False).head(20)
-    if len(recent_sorted) >= 4:
-        rows.append({'label': tr['new_releases'], 'key': 'new_releases',
-                     'cards': [to_dict(r) for _, r in recent_sorted.iterrows()]})
-
-    if has_type:
-        add_row('top_movies',   pool[pool['type'] == 'Movie'])
-        add_row('top_tv',       pool[pool['type'] == 'TV Show'])
-
-    for key, tags in GENRE_ROWS:
-        subset = pool[pool['genres'].apply(lambda g: any(tag in str(g) for tag in tags))]
-        add_row(key, subset)
-
-    has_origin = 'origin_country' in pool.columns
-
-    # African Stories — African-language films (always works)
-    african_pool = pool[pool['original_language'].isin(AFRICAN_LANGS)]
-    # Also include origin-country-tagged African titles if the column exists
-    if has_origin:
-        african_pool = pool[
-            pool['original_language'].isin(AFRICAN_LANGS) |
-            pool['origin_country'].isin(AFRICAN_COUNTRIES)
-        ]
-    add_row('african_stories', african_pool)
-
-    # Nollywood & South African rows — only show when origin_country data exists
-    # (requires a fresh fetch_data.py run — won't show on old pkl)
-    if has_origin:
-        nollywood_pool = pool[pool['origin_country'] == 'NG']
-        if len(nollywood_pool) >= 4:
-            result = build_row(tr.get('nollywood', 'Nollywood'), nollywood_pool)
-            if result:
-                result['key'] = 'nollywood'
-                rows.append(result)
-
-        sa_pool = pool[pool['origin_country'] == 'ZA']
-        if len(sa_pool) >= 4:
-            result = build_row(tr.get('south_african', 'South African Cinema'), sa_pool)
-            if result:
-                result['key'] = 'south_african'
-                rows.append(result)
-
-    add_row('kdrama',          pool[pool['original_language'] == 'ko'])
-    add_row('anime',           pool[(pool['original_language'] == 'ja') &
-                                    pool['genres'].apply(lambda g: 'Animation' in str(g))])
-    add_row('bollywood',       pool[pool['original_language'] == 'hi'])
-    add_row('acclaimed',       pool[(pool['vote_average'].fillna(0) >= 8.0) &
-                                    (pool['vote_count'].fillna(0) >= 500)],
-            sort_col='vote_count')
-
-    add_row('lgbtq', _lgbtq_pool(pool))
-
-    # Onboarding modal — shown for logged-in users who haven't completed it yet
-    show_ob   = current_user.is_authenticated and not current_user.onboarded
-    ob_picks  = _onboarding_picks(pool) if show_ob else []
+    # Onboarding modal data — only computed for users who haven't onboarded yet
+    show_ob  = current_user.is_authenticated and not current_user.onboarded
+    ob_picks = _onboarding_picks(pool) if show_ob else []
 
     return render_template('index.html', hero=hero, genre_rows=rows, region=region,
                            show_ob=show_ob, ob_picks=ob_picks)
