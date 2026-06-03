@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="ob-wrap">
+
+  <!-- ── Step 1: Welcome + Genre Pick ──────────────────────────────────── -->
+  <div class="ob-step" id="obStep1">
+    <div class="ob-header">
+      <div class="ob-logo-badge">🎬</div>
+      <h1 class="ob-title">Welcome to <span style="color:#9333ea">MOV.IE REC</span></h1>
+      <p class="ob-sub">
+        Your personal AI-powered movie &amp; TV recommender.<br>
+        Tell us what you love and we'll build your perfect watchlist.
+      </p>
+    </div>
+
+    <div class="ob-section-title">What genres do you enjoy?</div>
+    <p class="ob-section-hint">Pick any that appeal to you — this helps us show the right titles next.</p>
+
+    <div class="ob-genre-grid" id="genreGrid">
+      {% for genre, emoji in [
+        ('Action','💥'),('Comedy','😂'),('Drama','🎭'),('Horror','👻'),
+        ('Sci-Fi','🚀'),('Thriller','🔪'),('Romance','💕'),('Animation','✨'),
+        ('Documentary','🎥'),('Crime','🕵️'),('Fantasy','🧙'),('Family','👨‍👩‍👧')
+      ] %}
+      <button class="ob-genre-card" data-genre="{{ genre }}" type="button" onclick="toggleGenre(this)">
+        <span class="ob-genre-emoji">{{ emoji }}</span>
+        <span class="ob-genre-name">{{ genre }}</span>
+      </button>
+      {% endfor %}
+    </div>
+
+    <div class="ob-step-footer">
+      <button class="ob-btn-primary" id="step1Btn" onclick="goToStep2()">
+        Continue →
+      </button>
+      <button class="ob-btn-skip" onclick="goToStep2(true)">Skip genre selection</button>
+    </div>
+  </div>
+
+  <!-- ── Step 2: Title Picker ───────────────────────────────────────────── -->
+  <div class="ob-step d-none" id="obStep2">
+    <div class="ob-header">
+      <h1 class="ob-title">Which of these have you seen?</h1>
+      <p class="ob-sub">Pick at least 5 — we'll personalise your recommendations from day one.</p>
+      <div class="ob-progress">
+        <span id="pickCount">0</span> selected
+        <span id="pickHint" class="ob-pick-hint"> — pick at least 5</span>
+      </div>
+    </div>
+
+    <!-- Genre filter bar -->
+    <div class="ob-filter-bar" id="obFilterBar">
+      <button class="ob-filter-pill active" data-filter="all" onclick="filterPicks(this, 'all')">All</button>
+      <button class="ob-filter-pill" data-filter="Popular"      onclick="filterPicks(this, 'Popular')">Popular</button>
+      {% set genres_seen = [] %}
+      {% for m in picks %}
+        {% if m.ob_genre not in genres_seen and m.ob_genre != 'Popular' %}
+          {% if genres_seen.append(m.ob_genre) %}{% endif %}
+          <button class="ob-filter-pill" data-filter="{{ m.ob_genre }}"
+                  onclick="filterPicks(this, '{{ m.ob_genre }}')">{{ m.ob_genre }}</button>
+        {% endif %}
+      {% endfor %}
+    </div>
+
+    <div class="ob-grid" id="onboardingGrid">
+      {% for m in picks %}
+      <div class="ob-card" data-title="{{ m.title|e }}" data-genre="{{ m.ob_genre }}"
+           onclick="togglePick(this)">
+        <img src="{{ m.poster_url }}" alt="{{ m.title|e }}" loading="lazy"
+             onerror="this.src='https://placehold.co/300x450/1a1a2e/59005c?text=No+Image'"/>
+        <div class="ob-check-ring"><span class="ob-check-mark">✓</span></div>
+        <div class="ob-card-info">
+          <p class="ob-card-title">{{ m.title[:22] }}{% if m.title|length > 22 %}…{% endif %}</p>
+          <p class="ob-card-year">{{ m.year }}{% if m.vote_average %} · {{ m.vote_average }}★{% endif %}</p>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    <div class="ob-step-footer">
+      <button class="ob-btn-back" onclick="goBackToStep1()">← Back</button>
+      <button class="ob-btn-primary" id="doneBtn" disabled onclick="completeOnboarding()">
+        Let's go →
+      </button>
+      <button class="ob-btn-skip" onclick="skipOnboarding()">Skip for now</button>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const selected     = new Set();
+const selectedGenres = new Set();
+
+/* ── Step 1: genre selection ─────────────────────────────────────────── */
+function toggleGenre(btn) {
+  const g = btn.dataset.genre;
+  if (selectedGenres.has(g)) {
+    selectedGenres.delete(g);
+    btn.classList.remove('ob-genre-selected');
+  } else {
+    selectedGenres.add(g);
+    btn.classList.add('ob-genre-selected');
+  }
+}
+
+function goToStep2(skip) {
+  document.getElementById('obStep1').classList.add('d-none');
+  document.getElementById('obStep2').classList.remove('d-none');
+  // If user picked genres, pre-activate the first matching filter pill
+  if (!skip && selectedGenres.size > 0) {
+    const first = [...selectedGenres][0];
+    const pill = document.querySelector(`.ob-filter-pill[data-filter="${first}"]`);
+    if (pill) filterPicks(pill, first);
+  }
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function goBackToStep1() {
+  document.getElementById('obStep2').classList.add('d-none');
+  document.getElementById('obStep1').classList.remove('d-none');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+/* ── Step 2: title picker ────────────────────────────────────────────── */
+function filterPicks(btn, filter) {
+  document.querySelectorAll('.ob-filter-pill').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('.ob-card').forEach(card => {
+    const show = filter === 'all' || card.dataset.genre === filter;
+    card.style.display = show ? '' : 'none';
+  });
+}
+
+function togglePick(card) {
+  const title = card.dataset.title;
+  if (selected.has(title)) {
+    selected.delete(title);
+    card.classList.remove('ob-selected');
+  } else {
+    selected.add(title);
+    card.classList.add('ob-selected');
+  }
+  const count = selected.size;
+  const countEl = document.getElementById('pickCount');
+  const hint    = document.getElementById('pickHint');
+  const btn     = document.getElementById('doneBtn');
+  if (countEl) countEl.textContent = count;
+  if (hint)    hint.style.display  = count >= 5 ? 'none' : '';
+  if (btn)     btn.disabled        = count < 5;
+}
+
+function completeOnboarding() {
+  const btn = document.getElementById('doneBtn');
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+  fetch('/api/onboarding/complete', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ titles: [...selected] })
+  })
+  .then(r => r.json())
+  .then(() => { window.location.href = '/'; })
+  .catch(() => { btn.disabled = false; btn.textContent = 'Let\'s go →'; });
+}
+
+function skipOnboarding() {
+  fetch('/api/onboarding/complete', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ titles: [] })
+  }).finally(() => { window.location.href = '/'; });
+}
+</script>
+{% endblock %}

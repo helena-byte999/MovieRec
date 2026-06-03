@@ -481,7 +481,10 @@ function doGenreBrowse(genres) {
   fetch(`/api/genre_top?${params}`)
     .then(r => r.json())
     .then(data => {
-      const results = data.items || [];
+      // Handle both {items:[...]} dict and legacy plain-array responses
+      const results  = Array.isArray(data) ? data : (data.items || []);
+      const hasMore  = Array.isArray(data) ? false : !!data.has_more;
+      const nextOff  = Array.isArray(data) ? results.length : (data.offset || results.length);
       if (!results.length) {
         if (searchMsg) searchMsg.textContent = `No results found for "${genres.join(' + ')}".`;
         return;
@@ -490,9 +493,9 @@ function doGenreBrowse(genres) {
       const heading = document.getElementById('resultsHeading');
       if (heading) heading.textContent = `Top ${genres.join(' + ')} Titles`;
       if (recGrid) recGrid.innerHTML = results.map(m => cardHtml(m)).join('');
-      _genreState = { genres, offset: data.offset || results.length };
+      _genreState = { genres, offset: nextOff };
       const wrap = document.getElementById('recMoreWrap');
-      if (wrap) wrap.classList.toggle('d-none', !data.has_more);
+      if (wrap) wrap.classList.toggle('d-none', !hasMore);
       if (resultsSection) {
         resultsSection.classList.remove('d-none');
         setTimeout(() => resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);

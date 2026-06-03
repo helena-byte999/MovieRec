@@ -55,6 +55,7 @@ class User(UserMixin, db.Model):
     created_at         = db.Column(db.DateTime,    default=datetime.utcnow)
     email_verified     = db.Column(db.Boolean,     default=False)
     verification_token = db.Column(db.String(64),  nullable=True)
+    onboarded          = db.Column(db.Boolean,     default=False)
     watchlist    = db.relationship('WatchlistItem', backref='user', lazy=True,
                                    cascade='all, delete-orphan')
 
@@ -766,13 +767,77 @@ def home():
         )
         return not is_kids_anim
 
-    lgbtq_pool = pool[
-        pool['tags'].str.contains('lgbtq', case=False, na=False) &
-        pool['genres'].apply(_lgbtq_central)
-    ]
+    if 'tags' in pool.columns:
+        lgbtq_pool = pool[
+            pool['tags'].str.contains('lgbtq', case=False, na=False) &
+            pool['genres'].apply(_lgbtq_central)
+        ]
+    else:
+        lgbtq_pool = pool.iloc[:0]
     add_row('lgbtq', lgbtq_pool)
 
     return render_template('index.html', hero=hero, genre_rows=rows, region=region)
+
+
+@app.route('/onboarding')
+@login_required
+def onboarding():
+    if current_user.onboarded:
+        return redirect('/')
+    region = _get_region()
+    pool   = get_pool(region)
+    seen   = set()
+    picks  = []
+    # 12 titles from each major genre so genre filter is useful
+    genre_buckets = [
+        ('Action',         ['Action', 'Adventure']),
+        ('Comedy',         ['Comedy']),
+        ('Drama',          ['Drama']),
+        ('Horror',         ['Horror']),
+        ('Sci-Fi',         ['Science Fiction', 'Fantasy']),
+        ('Thriller',       ['Thriller', 'Crime', 'Mystery']),
+        ('Animation',      ['Animation']),
+        ('Romance',        ['Romance']),
+        ('Documentary',    ['Documentary']),
+        ('Family',         ['Family', 'Kids']),
+    ]
+    for genre_label, tags in genre_buckets:
+        sub = pool[pool['genres'].apply(lambda g: any(t in str(g) for t in tags))]
+        for _, row in sub.nlargest(14, 'popularity').iterrows():
+            m = to_dict(row)
+            if m['id'] not in seen and m['poster_url'] != NO_POSTER:
+                seen.add(m['id'])
+                picks.append({**m, 'ob_genre': genre_label})
+    # Fill remaining slots with overall popular titles
+    for _, row in pool.nlargest(40, 'popularity').iterrows():
+        m = to_dict(row)
+        if m['id'] not in seen and m['poster_url'] != NO_POSTER:
+            seen.add(m['id'])
+            picks.append({**m, 'ob_genre': 'Popular'})
+    return render_template('onboarding.html', picks=picks[:120])
+
+
+@app.route('/api/onboarding/complete', methods=['POST'])
+@login_required
+def onboarding_complete():
+    titles = request.json.get('titles', [])
+    for title in titles:
+        row = movies[movies['title'] == title]
+        if row.empty:
+            continue
+        m = to_dict(row.iloc[0])
+        if not WatchedItem.query.filter_by(user_id=current_user.id, title=title).first():
+            db.session.add(WatchedItem(
+                user_id    = current_user.id,
+                title      = title,
+                poster_url = m['poster_url'],
+                year       = m['year'],
+                media_type = m['type'],
+                rating     = m['vote_average'],
+            ))
+    current_user.onboarded = True
+    db.session.commit()
+    return jsonify({'ok': True})
 
 
 @app.route('/watchlist')
@@ -910,9 +975,13 @@ def genre_top():
 
     genre = genres[0] if len(genres) == 1 else None
     if 'LGBTQ+' in genres:
-        subset = pool[pool['tags'].str.contains('lgbtq', case=False, na=False)]
+        if 'tags' in pool.columns:
+            subset = pool[pool['tags'].str.contains('lgbtq', case=False, na=False)]
+        else:
+            subset = pool.iloc[:0]
         if len(subset) >= 4:
-            return jsonify([to_dict(r) for _, r in subset.nlargest(20, 'popularity').iterrows()])
+            items = [to_dict(r) for _, r in subset.nlargest(20, 'popularity').iterrows()]
+            return jsonify({'items': items, 'has_more': False, 'offset': len(items)})
         # Live TMDB fallback (works before pkl rebuild)
         try:
             mt = 'tv' if media == 'TV Show' else 'movie'
@@ -942,10 +1011,11 @@ def genre_top():
                     'poster_url':   f"{POSTER_BASE}{pp}" if pp else NO_POSTER,
                     'backdrop_url': f"{BACKDROP_BASE}{bp}" if bp else '',
                     'original_language': item.get('original_language', ''),
+                    'is_lgbtq': True,
                 })
-            return jsonify(out)
+            return jsonify({'items': out, 'has_more': False, 'offset': len(out)})
         except Exception:
-            return jsonify([])
+            return jsonify({'items': [], 'has_more': False, 'offset': 0})
 
     subset = pool[pool['genres'].apply(lambda g: any(gen in str(g) for gen in genres))]
     if media in ('Movie', 'TV Show') and has_type:
@@ -1276,7 +1346,7 @@ def register_page():
             _migrate_session_wl()
             _send_verification_email(user)
             _send_welcome_email(user)
-            return redirect('/')
+            return redirect('/onboarding')
     return render_template('auth/register.html')
 
 
@@ -1373,6 +1443,9 @@ def google_callback():
 
     login_user(user)
     _migrate_session_wl()
+    # Send new Google users through onboarding too
+    if not user.onboarded:
+        return redirect('/onboarding')
     return redirect('/')
 
 
@@ -1385,6 +1458,7 @@ with app.app_context():
         with db.engine.connect() as conn:
             conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT FALSE'))
             conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS verification_token VARCHAR(64)'))
+            conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS onboarded BOOLEAN DEFAULT FALSE'))
             conn.commit()
     except Exception:
         pass  # SQLite doesn't support IF NOT EXISTS — no-op on local dev
