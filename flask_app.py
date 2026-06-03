@@ -23,6 +23,10 @@ if _db_url.startswith('postgres://'):
     _db_url = _db_url.replace('postgres://', 'postgresql://', 1)
 app.config['SQLALCHEMY_DATABASE_URI']        = _db_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+# Secure session cookies on HTTPS (Render) — keeps OAuth state intact
+app.config['SESSION_COOKIE_SECURE']   = _db_url.startswith('postgresql')
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
 # ── Email (Gmail SMTP) ───────────────────────────────────────────────────────
 app.config['MAIL_SERVER']   = 'smtp.gmail.com'
@@ -1372,9 +1376,18 @@ def google_callback():
     return redirect('/')
 
 
-# ── Create DB tables on first run ────────────────────────────────────────────
+# ── Create DB tables + migrate new columns ───────────────────────────────────
 with app.app_context():
     db.create_all()
+    # Add columns introduced after initial deploy (safe — IF NOT EXISTS is PostgreSQL syntax)
+    from sqlalchemy import text
+    try:
+        with db.engine.connect() as conn:
+            conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT FALSE'))
+            conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS verification_token VARCHAR(64)'))
+            conn.commit()
+    except Exception:
+        pass  # SQLite doesn't support IF NOT EXISTS — no-op on local dev
 
 
 if __name__ == '__main__':
