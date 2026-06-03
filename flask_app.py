@@ -681,6 +681,37 @@ def get_recs(title, offset=0, limit=20, user_id=None):
 
 
 # ── Pages ───────────────────────────────────────────────────────────────────
+def _onboarding_picks(pool):
+    """Return diverse picks for the onboarding modal (120 titles max)."""
+    seen  = set()
+    picks = []
+    genre_buckets = [
+        ('Action',      ['Action', 'Adventure']),
+        ('Comedy',      ['Comedy']),
+        ('Drama',       ['Drama']),
+        ('Horror',      ['Horror']),
+        ('Sci-Fi',      ['Science Fiction', 'Fantasy']),
+        ('Thriller',    ['Thriller', 'Crime', 'Mystery']),
+        ('Animation',   ['Animation']),
+        ('Romance',     ['Romance']),
+        ('Documentary', ['Documentary']),
+        ('Family',      ['Family', 'Kids']),
+    ]
+    for genre_label, tags in genre_buckets:
+        sub = pool[pool['genres'].apply(lambda g: any(t in str(g) for t in tags))]
+        for _, row in sub.nlargest(14, 'popularity').iterrows():
+            m = to_dict(row)
+            if m['id'] not in seen and m['poster_url'] != NO_POSTER:
+                seen.add(m['id'])
+                picks.append({**m, 'ob_genre': genre_label})
+    for _, row in pool.nlargest(40, 'popularity').iterrows():
+        m = to_dict(row)
+        if m['id'] not in seen and m['poster_url'] != NO_POSTER:
+            seen.add(m['id'])
+            picks.append({**m, 'ob_genre': 'Popular'})
+    return picks[:120]
+
+
 @app.route('/')
 def home():
     region = _get_region()
@@ -755,22 +786,29 @@ def home():
                                     (pool['vote_count'].fillna(0) >= 500)],
             sort_col='vote_count')
 
-    def _lgbtq_central(genres_str):
+    _LGBTQ_OVERVIEW_KW = {'gay', 'lesbian', 'bisexual', 'transgender', 'queer',
+                          'same-sex', 'lgbtq', 'pride', 'coming out', 'drag'}
+
+    def _lgbtq_central(genres_str, overview_str=''):
         """
-        Exclude kids' animation — Adventure Time, My Little Pony, Bluey etc.
-        have at most peripheral LGBTQ+ content; Netflix would never put them
-        in the LGBTQ+ row.
+        Exclude kids' animation and borderline items whose overview gives no
+        LGBTQ+ storyline signal (e.g. Simpsons tagged by a single episode).
         """
-        g = str(genres_str).lower()
-        is_kids_anim = 'animation' in g and any(
-            k in g for k in ('family', 'kids', 'children', 'comedy')
-        )
-        return not is_kids_anim
+        g  = str(genres_str).lower()
+        ov = str(overview_str).lower()
+        # Hard exclude: animation + family/kids/children genre combination
+        if 'animation' in g and any(k in g for k in ('family', 'kids', 'children')):
+            return False
+        # Hard exclude: animation + comedy with no LGBTQ+ storyline in overview
+        if 'animation' in g and 'comedy' in g:
+            if not any(kw in ov for kw in _LGBTQ_OVERVIEW_KW):
+                return False
+        return True
 
     if 'tags' in pool.columns:
         lgbtq_pool = pool[
             pool['tags'].str.contains('lgbtq', case=False, na=False) &
-            pool['genres'].apply(_lgbtq_central)
+            pool.apply(lambda r: _lgbtq_central(r.get('genres', ''), r.get('overview', '')), axis=1)
         ]
     else:
         lgbtq_pool = pool.iloc[:0]
@@ -976,25 +1014,50 @@ def genre_top():
     genre = genres[0] if len(genres) == 1 else None
     if 'LGBTQ+' in genres:
         if 'tags' in pool.columns:
-            subset = pool[pool['tags'].str.contains('lgbtq', case=False, na=False)]
+            # Apply the same adult-content guard used on the home row
+            subset = pool[
+                pool['tags'].str.contains('lgbtq', case=False, na=False) &
+                pool.apply(lambda r: _lgbtq_central(r.get('genres', ''), r.get('overview', '')), axis=1)
+            ]
         else:
             subset = pool.iloc[:0]
         if len(subset) >= 4:
             items = [to_dict(r) for _, r in subset.nlargest(20, 'popularity').iterrows()]
             return jsonify({'items': items, 'has_more': False, 'offset': len(items)})
-        # Live TMDB fallback (works before pkl rebuild)
+        # Live TMDB fallback — strict quality + age filters so kids shows don't appear
         try:
             mt = 'tv' if media == 'TV Show' else 'movie'
             raw = requests.get(f"https://api.themoviedb.org/3/discover/{mt}",
-                params={'api_key': TMDB_KEY, 'with_keywords': LGBTQ_KW,
-                        'sort_by': 'popularity.desc', 'vote_count.gte': 5}, timeout=5).json()
+                params={
+                    'api_key':        TMDB_KEY,
+                    'with_keywords':  LGBTQ_KW,
+                    'sort_by':        'popularity.desc',
+                    'vote_count.gte': 200,            # raises bar above niche/kids content
+                    'vote_average.gte': 6.0,          # quality floor
+                    'without_genres': '10751,10762',  # exclude Family, Kids
+                }, timeout=5).json()
             gmap = {g['id']: g['name'] for g in requests.get(
                 f"https://api.themoviedb.org/3/genre/{mt}/list",
                 params={'api_key': TMDB_KEY}, timeout=3).json().get('genres', [])}
             nk = 'title' if mt == 'movie' else 'name'
             dk = 'release_date' if mt == 'movie' else 'first_air_date'
+            # Genre IDs that flag kids/family content
+            KIDS_GIDS = {10751, 10762}   # Family, Kids
+            LGBTQ_OVERVIEW = {'gay', 'lesbian', 'bisexual', 'transgender', 'queer',
+                               'same-sex', 'lgbtq', 'pride', 'coming out', 'drag'}
             out = []
-            for item in raw.get('results', [])[:20]:
+            for item in raw.get('results', []):
+                gids = set(item.get('genre_ids', []))
+                # Skip anything still tagged Family/Kids or Animation+Comedy
+                if gids & KIDS_GIDS:
+                    continue
+                if 16 in gids and 35 in gids:  # Animation + Comedy = likely kids
+                    continue
+                # Prefer items whose overview mentions LGBTQ+ themes
+                overview = str(item.get('overview', '')).lower()
+                has_lgbtq_story = any(kw in overview for kw in LGBTQ_OVERVIEW)
+                if not has_lgbtq_story and _safe_float(item.get('vote_average', 0)) < 7.0:
+                    continue  # skip borderline items without storyline signals
                 gnames = ', '.join(gmap.get(gid, '') for gid in item.get('genre_ids', []) if gmap.get(gid))
                 pp = item.get('poster_path', '') or ''
                 bp = item.get('backdrop_path', '') or ''
@@ -1013,6 +1076,8 @@ def genre_top():
                     'original_language': item.get('original_language', ''),
                     'is_lgbtq': True,
                 })
+                if len(out) >= 20:
+                    break
             return jsonify({'items': out, 'has_more': False, 'offset': len(out)})
         except Exception:
             return jsonify({'items': [], 'has_more': False, 'offset': 0})
@@ -1346,7 +1411,7 @@ def register_page():
             _migrate_session_wl()
             _send_verification_email(user)
             _send_welcome_email(user)
-            return redirect('/onboarding')
+            return redirect('/')
     return render_template('auth/register.html')
 
 
@@ -1394,59 +1459,64 @@ def google_auth():
 
 @app.route('/auth/google/callback')
 def google_callback():
+    # ── Stage 1: exchange code for token (Authlib / Google) ─────────────
     try:
         token    = google_oauth.authorize_access_token()
         userinfo = token.get('userinfo') or google_oauth.userinfo()
-    except Exception:
-        flash('Google login failed. Please try again.', 'error')
+    except Exception as e:
+        app.logger.error(f'Google OAuth token error: {type(e).__name__}: {e}')
+        flash('Google sign-in failed. Please try again.', 'error')
         return redirect(url_for('login_page'))
 
-    # Normalise to lowercase — Google can return mixed-case emails
-    email     = (userinfo.get('email') or '').strip().lower()
-    google_id = userinfo.get('sub')
+    # ── Stage 2: user lookup / creation (DB ops wrapped separately) ─────
+    try:
+        email     = (userinfo.get('email') or '').strip().lower()
+        google_id = userinfo.get('sub')
 
-    if not email or not google_id:
-        flash('Google did not return your email. Please try again.', 'error')
+        if not email or not google_id:
+            flash('Google did not return your email. Please try again.', 'error')
+            return redirect(url_for('login_page'))
+
+        # 1. Already linked this Google account
+        user = User.query.filter_by(google_id=google_id).first()
+
+        if not user:
+            # 2. Email already registered → link Google to existing account
+            user = User.query.filter_by(email=email).first()
+            if user:
+                user.google_id = google_id
+                user.avatar    = userinfo.get('picture', '') or user.avatar
+                db.session.commit()
+            else:
+                # 3. Brand new user — ensure display name is unique
+                base_name    = userinfo.get('name', email.split('@')[0]).strip()
+                display_name = base_name
+                counter      = 1
+                while User.query.filter(
+                    db.func.lower(User.display_name) == display_name.lower()
+                ).first():
+                    display_name = f"{base_name}{counter}"
+                    counter += 1
+                user = User(
+                    email=email,
+                    display_name=display_name,
+                    google_id=google_id,
+                    avatar=userinfo.get('picture', ''),
+                    email_verified=True,
+                )
+                db.session.add(user)
+                db.session.commit()
+                _send_welcome_email(user)
+
+        login_user(user)
+        _migrate_session_wl()
+        return redirect('/')
+
+    except Exception as e:
+        app.logger.error(f'Google OAuth callback error: {type(e).__name__}: {e}')
+        db.session.rollback()
+        flash('Sign-in failed. Please try again.', 'error')
         return redirect(url_for('login_page'))
-
-    # 1. Already linked this Google account
-    user = User.query.filter_by(google_id=google_id).first()
-
-    if not user:
-        # 2. Email already registered normally → link Google to existing account
-        user = User.query.filter_by(email=email).first()
-        if user:
-            user.google_id = google_id
-            user.avatar    = userinfo.get('picture', '') or user.avatar
-            db.session.commit()
-        else:
-            # 3. Brand new user — ensure display name is unique
-            base_name    = userinfo.get('name', email.split('@')[0]).strip()
-            display_name = base_name
-            counter      = 1
-            while User.query.filter(
-                db.func.lower(User.display_name) == display_name.lower()
-            ).first():
-                display_name = f"{base_name}{counter}"
-                counter += 1
-
-            user = User(
-                email=email,
-                display_name=display_name,
-                google_id=google_id,
-                avatar=userinfo.get('picture', ''),
-                email_verified=True,  # Google already verified it
-            )
-            db.session.add(user)
-            db.session.commit()
-            _send_welcome_email(user)
-
-    login_user(user)
-    _migrate_session_wl()
-    # Send new Google users through onboarding too
-    if not user.onboarded:
-        return redirect('/onboarding')
-    return redirect('/')
 
 
 # ── Create DB tables + migrate new columns ───────────────────────────────────
