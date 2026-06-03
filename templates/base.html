@@ -17,74 +17,125 @@
     <a class="navbar-brand fw-black fs-4" href="/">
       <span style="color:#fff;font-weight:900">MOV.IE</span><span style="color:#9333ea;font-weight:900"> REC</span>
     </a>
-    <div class="navbar-nav mx-auto d-flex flex-row gap-1">
+
+    <!-- Desktop nav links (hidden on mobile — accessible via hamburger) -->
+    <div class="navbar-nav mx-auto d-none d-lg-flex flex-row gap-1">
       <a class="nav-link px-3 py-2 rounded-1 {% if active == 'home' %}nav-active{% endif %}" href="/">{{ t.home }}</a>
       <a class="nav-link px-3 py-2 rounded-1 {% if active == 'watchlist' %}nav-active{% endif %}" href="/watchlist">
         {{ t.watchlist }}
-        {% if session.get('watchlist') %}
-        <span class="badge rounded-pill bg-danger ms-1">{{ session['watchlist']|length }}</span>
+        {% if wl_titles %}
+        <span class="badge rounded-pill bg-danger ms-1">{{ wl_titles|length }}</span>
         {% endif %}
       </a>
     </div>
-    <!-- User menu -->
-    {% if current_user.is_authenticated %}
-    <div class="dropdown me-2">
-      <button class="btn btn-sm user-btn dropdown-toggle d-flex align-items-center gap-2"
-              data-bs-toggle="dropdown" aria-expanded="false">
-        {% if current_user.avatar %}
-        <img src="{{ current_user.avatar }}" class="user-avatar" alt=""/>
-        {% else %}
-        <span class="user-initials">{{ (current_user.display_name or current_user.email)[0].upper() }}</span>
-        {% endif %}
-        <span class="d-none d-md-inline" style="font-size:.8rem;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
-          {{ current_user.display_name or current_user.email.split('@')[0] }}
-        </span>
-      </button>
-      <ul class="dropdown-menu dropdown-menu-end region-menu">
-        <li><span class="dropdown-item-text small text-muted">{{ current_user.email }}</span></li>
-        <li><hr class="dropdown-divider" style="border-color:var(--border)"></li>
-        <li><a class="dropdown-item" href="/watchlist">{{ t.watchlist }}</a></li>
-        <li><a class="dropdown-item text-danger" href="/auth/logout">Sign out</a></li>
-      </ul>
-    </div>
-    {% else %}
-    <div class="d-flex gap-2 me-2">
+
+    <!-- Right-side controls -->
+    <div class="d-flex align-items-center gap-1 gap-lg-2">
+      <!-- User menu (logged in) -->
+      {% if current_user.is_authenticated %}
+      <div class="dropdown">
+        <button class="btn btn-sm user-btn dropdown-toggle d-flex align-items-center gap-2"
+                data-bs-toggle="dropdown" aria-expanded="false">
+          {% if current_user.avatar %}
+          <img src="{{ current_user.avatar }}" class="user-avatar" alt=""/>
+          {% else %}
+          <span class="user-initials">{{ (current_user.display_name or current_user.email)[0].upper() }}</span>
+          {% endif %}
+          <span class="d-none d-md-inline" style="font-size:.8rem;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+            {{ current_user.display_name or current_user.email.split('@')[0] }}
+          </span>
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end region-menu">
+          <li><span class="dropdown-item-text small text-muted">{{ current_user.email }}</span></li>
+          <li><hr class="dropdown-divider" style="border-color:var(--border)"></li>
+          <li><a class="dropdown-item" href="/watchlist">{{ t.watchlist }}</a></li>
+          <li><a class="dropdown-item text-danger" href="/auth/logout">Sign out</a></li>
+        </ul>
+      </div>
+      {% else %}
+      <!-- Auth buttons always visible -->
       <a href="/auth/login"    class="btn btn-sm auth-nav-btn">Sign in</a>
       <a href="/auth/register" class="btn btn-sm auth-nav-btn-solid">Register</a>
-    </div>
-    {% endif %}
-    <!-- Language selector -->
-    <div class="dropdown me-2">
-      <button class="btn btn-sm lang-btn dropdown-toggle" data-bs-toggle="dropdown"
-              aria-expanded="false" title="Filter by language">
-        {{ languages_list | selectattr('0', 'equalto', current_language) | map(attribute='1') | first | default('🌐 All Languages') }}
+      {% endif %}
+
+      <!-- Language selector (desktop only — in hamburger on mobile) -->
+      <div class="dropdown d-none d-lg-block">
+        <button class="btn btn-sm lang-btn dropdown-toggle" data-bs-toggle="dropdown"
+                aria-expanded="false" title="Filter by language">
+          {{ languages_list | selectattr('0', 'equalto', current_language) | map(attribute='1') | first | default('🌐') }}
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end lang-menu">
+          {% for code, label in languages_list %}
+          <li>
+            <a class="dropdown-item {% if current_language == code %}active{% endif %}"
+               href="#" onclick="setLanguage('{{ code }}'); return false;">{{ label }}</a>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+
+      <!-- Region selector (desktop only — in hamburger on mobile) -->
+      <div class="dropdown d-none d-lg-block">
+        <button class="btn btn-sm region-btn dropdown-toggle" data-bs-toggle="dropdown"
+                aria-expanded="false" title="Select your region">
+          {{ current_region }}
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end region-menu">
+          {% for code, label in regions_list %}
+          <li>
+            <a class="dropdown-item {% if current_region == code %}active{% endif %}"
+               href="#" onclick="setRegion('{{ code }}'); return false;">{{ label }}</a>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+
+      <!-- Hamburger button (mobile only) -->
+      <button class="hamburger-btn d-lg-none" id="hamburgerBtn"
+              aria-label="Open menu" onclick="toggleMobileMenu()">
+        <span></span><span></span><span></span>
       </button>
-      <ul class="dropdown-menu dropdown-menu-end lang-menu">
-        {% for code, label in languages_list %}
-        <li>
-          <a class="dropdown-item {% if current_language == code %}active{% endif %}"
-             href="#" onclick="setLanguage('{{ code }}'); return false;">{{ label }}</a>
-        </li>
-        {% endfor %}
-      </ul>
-    </div>
-    <!-- Region selector -->
-    <div class="dropdown">
-      <button class="btn btn-sm region-btn dropdown-toggle" data-bs-toggle="dropdown"
-              aria-expanded="false" title="Select your region">
-        {{ current_region }}
-      </button>
-      <ul class="dropdown-menu dropdown-menu-end region-menu">
-        {% for code, label in regions_list %}
-        <li>
-          <a class="dropdown-item {% if current_region == code %}active{% endif %}"
-             href="#" onclick="setRegion('{{ code }}'); return false;">{{ label }}</a>
-        </li>
-        {% endfor %}
-      </ul>
     </div>
   </div>
 </nav>
+
+<!-- ── Mobile slide-down menu ────────────────────────────────────────── -->
+<div class="mobile-nav d-lg-none" id="mobileNav">
+  <div class="mobile-nav-inner">
+    <!-- Nav links -->
+    <a href="/" class="mobile-nav-link {% if active == 'home' %}mobile-nav-active{% endif %}">
+      <span>{{ t.home }}</span>
+    </a>
+    <a href="/watchlist" class="mobile-nav-link {% if active == 'watchlist' %}mobile-nav-active{% endif %}">
+      <span>{{ t.watchlist }}</span>
+      {% if wl_titles %}
+      <span class="badge rounded-pill bg-danger ms-1">{{ wl_titles|length }}</span>
+      {% endif %}
+    </a>
+
+    <!-- Language picker -->
+    <div class="mobile-settings-group">
+      <p class="mobile-settings-label">Language</p>
+      <div class="d-flex flex-wrap gap-2">
+        {% for code, label in languages_list %}
+        <button class="mobile-setting-pill {% if current_language == code %}active{% endif %}"
+                onclick="setLanguage('{{ code }}')">{{ label }}</button>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Region picker -->
+    <div class="mobile-settings-group">
+      <p class="mobile-settings-label">Region</p>
+      <div class="d-flex flex-wrap gap-2">
+        {% for code, label in regions_list %}
+        <button class="mobile-setting-pill {% if current_region == code %}active{% endif %}"
+                onclick="setRegion('{{ code }}')">{{ label }}</button>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
 
 {% block content %}{% endblock %}
 
@@ -132,6 +183,25 @@
 <script>
 window.T    = JSON.parse(document.getElementById('t-data').textContent);
 window.LANG = '{{ current_language }}';
+
+function toggleMobileMenu() {
+  const menu = document.getElementById('mobileNav');
+  const btn  = document.getElementById('hamburgerBtn');
+  if (!menu) return;
+  const open = menu.classList.toggle('open');
+  if (btn) btn.classList.toggle('open', open);
+  document.body.style.overflow = open ? 'hidden' : '';
+}
+document.addEventListener('click', e => {
+  const menu = document.getElementById('mobileNav');
+  const btn  = document.getElementById('hamburgerBtn');
+  if (menu && menu.classList.contains('open') &&
+      !menu.contains(e.target) && btn && !btn.contains(e.target)) {
+    menu.classList.remove('open');
+    btn.classList.remove('open');
+    document.body.style.overflow = '';
+  }
+});
 </script>
 <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 {% block scripts %}{% endblock %}
