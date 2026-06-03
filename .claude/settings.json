@@ -5,7 +5,12 @@
       "Bash(ping -n 8 127.0.0.1 > nul & jupyter server list 2>&1)",
       "PowerShell($proc = Start-Process -FilePath \"python\" -ArgumentList \"-m\", \"jupyter\", \"lab\" -PassThru -WindowStyle Normal; Start-Sleep -Seconds 6; jupyter server list 2>&1; Write-Host \"PID: $\\($proc.Id\\)\" ; Get-Process -Id $proc.Id -ErrorAction SilentlyContinue | Select-Object Id, Name)",
       "Bash(del \"c:\\\\Users\\\\nanao\\\\OneDrive - Northumbria University - Production Azure AD\\\\Desktop\\\\python\\\\MovieRec\\\\Untitled.ipynb\")",
-      "Bash(python -c \"import utils; print\\(utils.__file__\\)\")"
+      "Bash(python -c \"import utils; print\\(utils.__file__\\)\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://127.0.0.1:5000/)",
+      "Bash(python flask_app.py)",
+      "Bash(python -m playwright install chromium --quiet)",
+      "Bash(python -m playwright install chromium)",
+      "Bash(python -c \"from flask_app import app, db; print\\('OK'\\)\")"
     ],
     "additionalDirectories": [
       "C:\\Users\\nanao\\OneDrive - Northumbria University - Production Azure AD\\Desktop\\python\\MovieRec",
