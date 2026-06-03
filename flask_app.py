@@ -7,7 +7,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from authlib.integrations.flask_client import OAuth
 from datetime import datetime
 from dotenv import load_dotenv
-import pickle, os, secrets, time, re
+import pickle, os, secrets, time, re, threading
 import numpy as np
 import requests
 
@@ -1342,8 +1342,9 @@ def register_page():
             db.session.commit()
             login_user(user)
             _migrate_session_wl()
-            _send_verification_email(user)
-            _send_welcome_email(user)
+            # Both emails sent in background — don't block the redirect
+            threading.Thread(target=_send_verification_email, args=[user], daemon=True).start()
+            threading.Thread(target=_send_welcome_email,      args=[user], daemon=True).start()
             return redirect('/')
     return render_template('auth/register.html')
 
@@ -1410,36 +1411,46 @@ def google_callback():
             flash('Google did not return your email. Please try again.', 'error')
             return redirect(url_for('login_page'))
 
-        # 1. Already linked this Google account
-        user = User.query.filter_by(google_id=google_id).first()
+        from sqlalchemy import or_
+        # Single query: match by google_id OR email (saves one DB round-trip)
+        user = User.query.filter(
+            or_(User.google_id == google_id, User.email == email)
+        ).first()
 
+        is_new = False
         if not user:
-            # 2. Email already registered → link Google to existing account
-            user = User.query.filter_by(email=email).first()
-            if user:
+            # Brand new user — ensure display name is unique
+            base_name    = userinfo.get('name', email.split('@')[0]).strip()
+            display_name = base_name
+            counter      = 1
+            while User.query.filter(
+                db.func.lower(User.display_name) == display_name.lower()
+            ).first():
+                display_name = f"{base_name}{counter}"
+                counter += 1
+            user = User(
+                email=email,
+                display_name=display_name,
+                google_id=google_id,
+                avatar=userinfo.get('picture', ''),
+                email_verified=True,
+            )
+            db.session.add(user)
+            is_new = True
+        else:
+            # Existing user — link Google if not already linked
+            if not user.google_id:
                 user.google_id = google_id
-                user.avatar    = userinfo.get('picture', '') or user.avatar
-                db.session.commit()
-            else:
-                # 3. Brand new user — ensure display name is unique
-                base_name    = userinfo.get('name', email.split('@')[0]).strip()
-                display_name = base_name
-                counter      = 1
-                while User.query.filter(
-                    db.func.lower(User.display_name) == display_name.lower()
-                ).first():
-                    display_name = f"{base_name}{counter}"
-                    counter += 1
-                user = User(
-                    email=email,
-                    display_name=display_name,
-                    google_id=google_id,
-                    avatar=userinfo.get('picture', ''),
-                    email_verified=True,
-                )
-                db.session.add(user)
-                db.session.commit()
-                _send_welcome_email(user)
+            if userinfo.get('picture') and not user.avatar:
+                user.avatar = userinfo.get('picture', '')
+
+        db.session.commit()
+
+        # Fire welcome email in background so it doesn't delay the redirect
+        if is_new:
+            threading.Thread(
+                target=_send_welcome_email, args=[user], daemon=True
+            ).start()
 
         login_user(user)
         _migrate_session_wl()
