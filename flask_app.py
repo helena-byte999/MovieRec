@@ -1,4 +1,5 @@
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for, flash
+from flask_mail import Mail, Message
 from werkzeug.middleware.proxy_fix import ProxyFix
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, logout_user, current_user, login_required
@@ -23,8 +24,17 @@ if _db_url.startswith('postgres://'):
 app.config['SQLALCHEMY_DATABASE_URI']        = _db_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-db           = SQLAlchemy(app)
+# ── Email (Gmail SMTP) ───────────────────────────────────────────────────────
+app.config['MAIL_SERVER']   = 'smtp.gmail.com'
+app.config['MAIL_PORT']     = 587
+app.config['MAIL_USE_TLS']  = True
+app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME', '')
+app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD', '')
+app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_USERNAME', '')
+
+db            = SQLAlchemy(app)
 login_manager = LoginManager(app)
+mail          = Mail(app)
 login_manager.login_view = 'login_page'
 oauth = OAuth(app)
 
@@ -36,9 +46,11 @@ class User(UserMixin, db.Model):
     password_hash= db.Column(db.String(256))
     google_id    = db.Column(db.String(100), unique=True)
     avatar       = db.Column(db.String(256))
-    region       = db.Column(db.String(10), default='GLOBAL')
-    language     = db.Column(db.String(5),  default='en')
-    created_at   = db.Column(db.DateTime,   default=datetime.utcnow)
+    region             = db.Column(db.String(10),  default='GLOBAL')
+    language           = db.Column(db.String(5),   default='en')
+    created_at         = db.Column(db.DateTime,    default=datetime.utcnow)
+    email_verified     = db.Column(db.Boolean,     default=False)
+    verification_token = db.Column(db.String(64),  nullable=True)
     watchlist    = db.relationship('WatchlistItem', backref='user', lazy=True,
                                    cascade='all, delete-orphan')
 
@@ -1161,6 +1173,71 @@ def wl_remove():
     return jsonify({'count': len(_wl_titles())})
 
 
+# ── Email helpers ────────────────────────────────────────────────────────────
+def _send_verification_email(user):
+    if not app.config['MAIL_USERNAME']:
+        return  # email not configured — skip silently
+    token = secrets.token_urlsafe(32)
+    user.verification_token = token
+    db.session.commit()
+    verify_url = url_for('verify_email', token=token, _external=True)
+    html = f"""
+    <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;background:#0a0c14;color:#f2f2f6;padding:2rem;border-radius:14px">
+      <h1 style="color:#fff;font-size:1.5rem;margin-bottom:.25rem">
+        <span style="color:#fff;font-weight:900">MOV.IE</span><span style="color:#9333ea;font-weight:900"> REC</span>
+      </h1>
+      <h2 style="color:#f2f2f6;font-size:1.2rem;margin-top:1.5rem">Welcome, {user.display_name}! 🎬</h2>
+      <p style="color:#7c809a;line-height:1.7">
+        Thanks for joining MOV.IE REC — your personal movie &amp; TV show recommender.<br/>
+        Please verify your email address to unlock all features.
+      </p>
+      <a href="{verify_url}"
+         style="display:inline-block;margin:1.5rem 0;background:#59005c;color:#fff;text-decoration:none;
+                padding:.75rem 2rem;border-radius:10px;font-weight:700;font-size:.95rem">
+        Verify my email
+      </a>
+      <p style="color:#7c809a;font-size:.8rem">This link expires in 24 hours. If you didn't register, ignore this email.</p>
+    </div>"""
+    try:
+        msg = Message('Verify your MOV.IE REC email', recipients=[user.email], html=html)
+        mail.send(msg)
+    except Exception:
+        pass  # don't block registration if email fails
+
+
+def _send_welcome_email(user):
+    if not app.config['MAIL_USERNAME']:
+        return
+    html = f"""
+    <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;background:#0a0c14;color:#f2f2f6;padding:2rem;border-radius:14px">
+      <h1 style="color:#fff;font-size:1.5rem;margin-bottom:.25rem">
+        <span style="color:#fff;font-weight:900">MOV.IE</span><span style="color:#9333ea;font-weight:900"> REC</span>
+      </h1>
+      <h2 style="color:#f2f2f6;font-size:1.2rem;margin-top:1.5rem">You're in, {user.display_name}! 🎉</h2>
+      <p style="color:#7c809a;line-height:1.7">
+        Your account is set up and ready to go. Here's what you can do:
+      </p>
+      <ul style="color:#7c809a;line-height:2">
+        <li>🔍 Search any movie or TV show for instant recommendations</li>
+        <li>🎲 Use the dice button for a random pick</li>
+        <li>📋 Build your personal watchlist</li>
+        <li>🎬 Mark titles as watched to improve your recommendations</li>
+        <li>🌍 Filter by region to find what's available near you</li>
+      </ul>
+      <a href="https://movierec-gzsa.onrender.com"
+         style="display:inline-block;margin:1.5rem 0;background:#59005c;color:#fff;text-decoration:none;
+                padding:.75rem 2rem;border-radius:10px;font-weight:700;font-size:.95rem">
+        Start watching
+      </a>
+      <p style="color:#7c809a;font-size:.8rem">Made with ❤️ by 3N4</p>
+    </div>"""
+    try:
+        msg = Message('Welcome to MOV.IE REC 🎬', recipients=[user.email], html=html)
+        mail.send(msg)
+    except Exception:
+        pass
+
+
 # ── Auth routes ──────────────────────────────────────────────────────────────
 @app.route('/auth/register', methods=['GET', 'POST'])
 def register_page():
@@ -1193,8 +1270,23 @@ def register_page():
             db.session.commit()
             login_user(user)
             _migrate_session_wl()
+            _send_verification_email(user)
+            _send_welcome_email(user)
             return redirect('/')
     return render_template('auth/register.html')
+
+
+@app.route('/auth/verify/<token>')
+def verify_email(token):
+    user = User.query.filter_by(verification_token=token).first()
+    if not user:
+        flash('Invalid or expired verification link.', 'error')
+        return redirect('/')
+    user.email_verified     = True
+    user.verification_token = None
+    db.session.commit()
+    flash('Email verified! Your account is fully active.', 'success')
+    return redirect('/')
 
 
 @app.route('/auth/login', methods=['GET', 'POST'])
@@ -1269,9 +1361,11 @@ def google_callback():
                 display_name=display_name,
                 google_id=google_id,
                 avatar=userinfo.get('picture', ''),
+                email_verified=True,  # Google already verified it
             )
             db.session.add(user)
             db.session.commit()
+            _send_welcome_email(user)
 
     login_user(user)
     _migrate_session_wl()

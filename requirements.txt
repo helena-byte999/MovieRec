@@ -13,4 +13,5 @@ SQLAlchemy
 gunicorn
 psycopg2-binary
 pyarrow
+Flask-Mail
 pytest
