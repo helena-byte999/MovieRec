@@ -705,7 +705,8 @@ def _lgbtq_pool(pool):
     if 'tags' in pool.columns:
         by_tag = pool['tags'].str.contains(_LGBTQ_TAG_PAT, na=False)
     else:
-        by_tag = pool['title'].apply(lambda _: False)
+        # Return a proper bool-dtype Series of all-False so | works correctly
+        by_tag = pool['overview'].str.contains('XXXXNOMATCH', na=False)
 
     by_ov    = pool['overview'].str.contains(_LGBTQ_OV_PAT, na=False)
     not_kids = ~pool['genres'].str.contains(_KIDS_GENRE_PAT, na=False)
@@ -722,8 +723,12 @@ def _cached_genre_rows(region, lang, pool, tr):
     entry = _ROW_CACHE.get(key)
     if entry and (time.time() - entry['at']) < _ROW_CACHE_TTL:
         return entry['rows']
-    rows = _build_genre_rows(pool, tr, region)
-    _ROW_CACHE[key] = {'rows': rows, 'at': time.time()}
+    try:
+        rows = _build_genre_rows(pool, tr, region)
+        _ROW_CACHE[key] = {'rows': rows, 'at': time.time()}
+    except Exception as e:
+        app.logger.error(f'Row build error: {e}')
+        rows = _ROW_CACHE.get(key, {}).get('rows', [])
     return rows
 
 
