@@ -23,7 +23,7 @@
   <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-5 g-3" id="wlGrid">
     {% for m in watchlist %}
     <div class="col" id="wl-{{ loop.index }}">
-      <div class="movie-card h-100" onclick='openDetail({{ m|tojson }})'>
+      <div class="movie-card h-100 wl-card" data-movie="{{ m|tojson|e }}">
         <div class="position-relative">
           <img src="{{ m.poster_url }}" alt="{{ m.title }}" class="card-poster w-100" loading="lazy"/>
           <span class="rating-badge">{{ m.vote_average }}★</span>
@@ -32,11 +32,17 @@
           <p class="card-name" title="{{ m.title }}">{{ m.title }}</p>
           <p class="card-meta-text">{{ m.year }} · {% if m.type == 'Movie' %}{{ t.type_movie }}{% else %}{{ t.type_tv }}{% endif %}</p>
           <button class="btn btn-sm btn-success w-100 mt-1 fw-bold watched-btn"
-                  onclick="event.stopPropagation();markWatched('{{ m.title }}','{{ m.poster_url }}','{{ m.year }}','{{ m.type }}',{{ m.vote_average }},'wl-{{ loop.index }}')">
+                  data-title="{{ m.title|e }}"
+                  data-poster="{{ m.poster_url|e }}"
+                  data-year="{{ m.year }}"
+                  data-type="{{ m.type|e }}"
+                  data-rating="{{ m.vote_average }}"
+                  data-cardid="wl-{{ loop.index }}">
             🎬 {{ t.mark_watched | default('Watched!') }}
           </button>
           <button class="btn btn-sm btn-outline-danger w-100 mt-1 remove-btn"
-                  onclick="event.stopPropagation();removeFromWatchlist('{{ m.title }}', 'wl-{{ loop.index }}')">
+                  data-title="{{ m.title|e }}"
+                  data-cardid="wl-{{ loop.index }}">
             {{ t.remove }}
           </button>
         </div>
@@ -109,6 +115,38 @@
 <script id="wl-data" type="application/json">{{ wl_titles|tojson }}</script>
 <script>
 window.WATCHLIST = JSON.parse(document.getElementById('wl-data').textContent);
+
+// ── Watchlist card clicks — safe event delegation ─────────────────────────
+document.addEventListener('click', e => {
+  // Watched! button
+  const watchedBtn = e.target.closest('.watched-btn');
+  if (watchedBtn) {
+    e.stopPropagation();
+    markWatched(
+      watchedBtn.dataset.title,
+      watchedBtn.dataset.poster,
+      watchedBtn.dataset.year,
+      watchedBtn.dataset.type,
+      parseFloat(watchedBtn.dataset.rating),
+      watchedBtn.dataset.cardid
+    );
+    return;
+  }
+
+  // Remove button
+  const removeBtn = e.target.closest('.remove-btn');
+  if (removeBtn) {
+    e.stopPropagation();
+    removeFromWatchlist(removeBtn.dataset.title, removeBtn.dataset.cardid);
+    return;
+  }
+
+  // Card click → open detail modal
+  const card = e.target.closest('.wl-card');
+  if (card) {
+    try { openDetail(JSON.parse(card.dataset.movie)); } catch(err) {}
+  }
+});
 
 function refreshSuggestions() {
   const btn  = document.getElementById('refreshSuggestionsBtn');
