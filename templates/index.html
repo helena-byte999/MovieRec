@@ -111,6 +111,94 @@
 
 {% endblock %}
 
+<!-- ── Onboarding / Welcome Modal ────────────────────────────────────── -->
+<div class="ob-modal-overlay" id="obOverlay" data-show-ob="{{ 'true' if show_ob else 'false' }}">
+  <div class="ob-modal" id="obModal">
+
+    {% if show_ob %}
+    {# ── Logged-in, not onboarded: full 2-step personalization flow ─── #}
+
+    <!-- Step 1: genre picker -->
+    <div class="ob-modal-step" id="obModalStep1">
+      <button class="ob-modal-close" onclick="closeObModal()" aria-label="Skip">✕</button>
+      <div class="ob-modal-badge">🎬</div>
+      <h2 class="ob-modal-title">Welcome to <span style="color:#9333ea">MOV.IE REC</span></h2>
+      <p class="ob-modal-sub">Your personal movie &amp; TV recommender. Let's personalise it — takes 30 seconds.</p>
+      <p class="ob-modal-section-label">What genres do you enjoy?</p>
+      <div class="ob-genre-grid">
+        {% for genre, emoji in [('Action','💥'),('Comedy','😂'),('Drama','🎭'),('Horror','👻'),
+          ('Sci-Fi','🚀'),('Thriller','🔪'),('Romance','💕'),('Animation','✨'),
+          ('Documentary','🎥'),('Crime','🕵️'),('Fantasy','🧙'),('Family','👨‍👩‍👧')] %}
+        <button class="ob-genre-card" data-genre="{{ genre }}" onclick="toggleObGenre(this)">
+          <span class="ob-genre-emoji">{{ emoji }}</span>
+          <span class="ob-genre-name">{{ genre }}</span>
+        </button>
+        {% endfor %}
+      </div>
+      <div class="ob-modal-footer">
+        <button class="ob-btn-primary" onclick="goObStep2()">Continue →</button>
+        <button class="ob-btn-skip" onclick="closeObModal()">Skip for now</button>
+      </div>
+    </div>
+
+    <!-- Step 2: title picker -->
+    <div class="ob-modal-step d-none" id="obModalStep2">
+      <button class="ob-modal-close" onclick="closeObModal()" aria-label="Skip">✕</button>
+      <h2 class="ob-modal-title">Which of these have you seen?</h2>
+      <p class="ob-modal-sub">Pick at least 5 to unlock your personalised feed.</p>
+      <div class="ob-progress"><span id="obPickCount">0</span> selected<span id="obPickHint" class="ob-pick-hint"> — pick at least 5</span></div>
+      <div class="ob-filter-bar" id="obModalFilterBar">
+        <button class="ob-filter-pill active" data-filter="all" onclick="obFilter(this,'all')">All</button>
+        <button class="ob-filter-pill" data-filter="Popular" onclick="obFilter(this,'Popular')">Popular</button>
+        {% set gseen = [] %}
+        {% for m in ob_picks %}
+          {% if m.ob_genre not in gseen and m.ob_genre != 'Popular' %}
+            {% if gseen.append(m.ob_genre) %}{% endif %}
+            <button class="ob-filter-pill" data-filter="{{ m.ob_genre }}" onclick="obFilter(this,'{{ m.ob_genre }}')">{{ m.ob_genre }}</button>
+          {% endif %}
+        {% endfor %}
+      </div>
+      <div class="ob-grid ob-modal-grid" id="obModalGrid">
+        {% for m in ob_picks %}
+        <div class="ob-card" data-title="{{ m.title|e }}" data-genre="{{ m.ob_genre }}" onclick="toggleObPick(this)">
+          <img src="{{ m.poster_url }}" alt="{{ m.title|e }}" loading="lazy"
+               onerror="this.src='https://placehold.co/300x450/1a1a2e/59005c?text=No+Image'"/>
+          <div class="ob-check-ring"><span class="ob-check-mark">✓</span></div>
+          <div class="ob-card-info">
+            <p class="ob-card-title">{{ m.title[:20] }}{% if m.title|length > 20 %}…{% endif %}</p>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      <div class="ob-modal-footer ob-modal-footer-row">
+        <button class="ob-btn-back" onclick="goObStep1()">← Back</button>
+        <button class="ob-btn-primary" id="obDoneBtn" disabled onclick="completeObModal()">Let's go →</button>
+        <button class="ob-btn-skip" onclick="closeObModal()">Skip</button>
+      </div>
+    </div>
+
+    {% else %}
+    {# ── Guest / first visit: "how to use" welcome tour ─────────────── #}
+    <div class="ob-modal-step" id="obWelcome">
+      <button class="ob-modal-close" onclick="closeObModal()" aria-label="Close">✕</button>
+      <div class="ob-modal-badge">🎬</div>
+      <h2 class="ob-modal-title">Welcome to <span style="color:#9333ea">MOV.IE REC</span></h2>
+      <p class="ob-modal-sub">Your personal AI movie &amp; TV recommender. Here's how it works:</p>
+      <div class="ob-how-list">
+        <div class="ob-how-item"><span class="ob-how-icon">🔍</span><div><strong>Search any title</strong><p>Type a movie or show you like — we find what to watch next.</p></div></div>
+        <div class="ob-how-item"><span class="ob-how-icon">🎲</span><div><strong>Random pick</strong><p>Hit the dice button for a surprise recommendation.</p></div></div>
+        <div class="ob-how-item"><span class="ob-how-icon">📋</span><div><strong>Build your Watchlist</strong><p>Save titles to your watchlist — sign up to keep it forever.</p></div></div>
+        <div class="ob-how-item"><span class="ob-how-icon">🎭</span><div><strong>Browse by genre</strong><p>Pick a genre from the search bar or scroll the rows below.</p></div></div>
+      </div>
+      <div class="ob-modal-footer">
+        <button class="ob-btn-primary" onclick="closeObModal()">Start exploring</button>
+      </div>
+    </div>
+    {% endif %}
+
+  </div>
+</div>
+
 {% block scripts %}
 <script id="wl-data" type="application/json">{{ wl_titles|tojson }}</script>
 <script>
@@ -157,5 +245,79 @@ fetch('/api/trending_live')
     }
   })
   .catch(() => {});
+
+/* ── Onboarding / welcome modal ──────────────────────────────────────── */
+(function() {
+  const overlay  = document.getElementById('obOverlay');
+  const showOb   = overlay && overlay.dataset.showOb === 'true';
+  const SEEN_KEY = 'movierec_welcome_seen';
+  if (showOb || !localStorage.getItem(SEEN_KEY)) {
+    overlay && (overlay.style.display = 'flex');
+  }
+})();
+
+const _obSelected = new Set();
+const _obGenres   = new Set();
+
+function closeObModal() {
+  const overlay = document.getElementById('obOverlay');
+  if (overlay) overlay.style.display = 'none';
+  document.body.style.overflow = '';
+  localStorage.setItem('movierec_welcome_seen', '1');
+}
+
+function toggleObGenre(btn) {
+  const g = btn.dataset.genre;
+  _obGenres.has(g) ? _obGenres.delete(g) : _obGenres.add(g);
+  btn.classList.toggle('ob-genre-selected', _obGenres.has(g));
+}
+
+function goObStep2() {
+  document.getElementById('obModalStep1').classList.add('d-none');
+  document.getElementById('obModalStep2').classList.remove('d-none');
+  if (_obGenres.size > 0) {
+    const first = [..._obGenres][0];
+    const pill = document.querySelector(`#obModalFilterBar .ob-filter-pill[data-filter="${first}"]`);
+    if (pill) obFilter(pill, first);
+  }
+}
+
+function goObStep1() {
+  document.getElementById('obModalStep2').classList.add('d-none');
+  document.getElementById('obModalStep1').classList.remove('d-none');
+}
+
+function obFilter(btn, filter) {
+  document.querySelectorAll('#obModalFilterBar .ob-filter-pill').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('#obModalGrid .ob-card').forEach(c => {
+    c.style.display = (filter === 'all' || c.dataset.genre === filter) ? '' : 'none';
+  });
+}
+
+function toggleObPick(card) {
+  const t = card.dataset.title;
+  _obSelected.has(t) ? _obSelected.delete(t) : _obSelected.add(t);
+  card.classList.toggle('ob-selected', _obSelected.has(t));
+  const n = _obSelected.size;
+  const countEl = document.getElementById('obPickCount');
+  const hint    = document.getElementById('obPickHint');
+  const btn     = document.getElementById('obDoneBtn');
+  if (countEl) countEl.textContent = n;
+  if (hint)    hint.style.display  = n >= 5 ? 'none' : '';
+  if (btn)     btn.disabled        = n < 5;
+}
+
+function completeObModal() {
+  const btn = document.getElementById('obDoneBtn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  fetch('/api/onboarding/complete', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({titles: [..._obSelected]})
+  })
+  .then(() => { closeObModal(); location.reload(); })
+  .catch(() => { btn.disabled = false; btn.textContent = "Let's go →"; });
+}
 </script>
 {% endblock %}
